@@ -33,6 +33,10 @@ A comprehensive threat intelligence platform for analyzing Indicators of Comprom
    # Or set as environment variable:
    export OTX_API_KEY=your_api_key_here
    ```
+4. Run
+ ```
+   python dashboard_runner.py
+   ```
 
 ## Architecture
 
