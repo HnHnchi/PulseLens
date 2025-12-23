@@ -17,47 +17,22 @@ A comprehensive threat intelligence platform for analyzing Indicators of Comprom
 ### Installation
 
 1. Clone the repository:
-   \\\ash
+   ```
    git clone <repository-url>
    cd pulselens
-   \\\
+   ```
 
 2. Install dependencies:
-   \\\ash
+   ```
    pip install -r requirements.txt
-   \\\
+   ```
 
 3. Configure OTX API key (optional but recommended):
-   \\\ash
+   ```
    # Edit config.py and set your OTX_API_KEY
    # Or set as environment variable:
    export OTX_API_KEY=your_api_key_here
-   \\\
-
-### Usage
-
-#### Analyze IOCs from file:
-\\\ash
-python main.py -f data/sample_iocs.txt -o reports
-\\\
-
-#### Analyze IOCs from string:
-\\\ash
-python main.py -s \
-45.77.89.12
-malicious.com
-44d88612fea8a8f36de82e1278abb02f\
-\\\
-
-#### Create sample data for testing:
-\\\ash
-python main.py --create-sample
-\\\
-
-#### View database statistics:
-\\\ash
-python main.py --stats
-\\\
+   ```
 
 ## Architecture
 
