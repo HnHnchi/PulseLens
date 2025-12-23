@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}IOC Details - {{ ioc.ioc_value }}{% endblock %}
+
+{% block page_title %}IOC Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- IOC Information -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold">IOC Information</h6>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportIOC()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="reanalyzeIOC()">
+                        <i class="fas fa-sync"></i> Re-analyze
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td><strong>IOC Value:</strong></td>
+                                <td><code class="ioc-value">{{ ioc.ioc_value }}</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Type:</strong></td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ ioc.ioc_type.upper() }}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Original Value:</strong></td>
+                                <td>
+                                    {% if ioc.original_value and ioc.original_value != ioc.ioc_value %}
+                                        <code class="ioc-value">{{ ioc.original_value }}</code>
+                                    {% else %}
+                                        <span class="text-muted">Same as normalized</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Feed Source:</strong></td>
+                                <td>{{ ioc.feed_source or 'Unknown' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td><strong>First Seen:</strong></td>
+                                <td>{{ formatDateTime(ioc.first_seen) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Last Seen:</strong></td>
+                                <td>{{ formatDateTime(ioc.last_seen) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Created:</strong></td>
+                                <td>{{ formatDateTime(ioc.created_at) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Updated:</strong></td>
+                                <td>{{ formatDateTime(ioc.updated_at) }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Classification Results -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Classification Results</h6>
+            </div>
+            <div class="card-body">
+                {% if ioc.severity %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Severity Assessment</h6>
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="badge severity-{{ ioc.severity.level }} me-3" style="font-size: 1.2em;">
+                                    {{ ioc.severity.level.upper() }}
+                                </span>
+                                <div>
+                                    <h5 class="mb-0">{{ ioc.severity.score }}/10</h5>
+                                    <small class="text-muted">Severity Score</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Score Breakdown -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small>Risk Level</small>
+                                    <small>{{ ioc.severity.score }}/10</small>
+                                </div>
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar severity-{{ ioc.severity.level }}" 
+                                         style="width: {{ (ioc.severity.score / 10 * 100) }}%"></div>
+                                </div>
+                            </div>
+                            
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Confidence:</strong></td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if ioc.severity.confidence == 'high' else 'warning' if ioc.severity.confidence == 'medium' else 'info' }}">
+                                            {{ ioc.severity.confidence.upper() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Classification Date:</strong></td>
+                                    <td>{{ formatDateTime(ioc.severity.classified_at) if ioc.severity.classified_at else 'Unknown' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>Recommended Actions</h6>
+                            {% if ioc.severity.recommended_actions %}
+                                <ul class="list-unstyled">
+                                    {% for action in ioc.severity.recommended_actions %}
+                                        <li class="mb-2">
+                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                            {{ action }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">No specific actions recommended</p>
+                            {% endif %}
+                            
+                            {% if ioc.severity.classification_factors %}
+                                <h6 class="mt-3">Classification Factors</h6>
+                                {% for category, factors in ioc.severity.classification_factors.items() %}
+                                    <div class="mb-2">
+                                        <strong>{{ category.replace('_', ' ').title() }}:</strong>
+                                        {% if factors is iterable and factors is not string %}
+                                            {{ factors | join(', ') }}
+                                        {% else %}
+                                            {{ factors }}
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No classification data available for this IOC
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Enrichment Data -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Threat Intelligence Enrichment</h6>
+            </div>
+            <div class="card-body">
+                {% if ioc.enrichment %}
+                    {% if ioc.enrichment.sources %}
+                        <div class="mb-3">
+                            <strong>Data Sources:</strong>
+                            {% for source in ioc.enrichment.sources %}
+                                <span class="badge bg-primary me-1">{{ source }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if ioc.enrichment.threat_intel %}
+                        {% for source, data in ioc.enrichment.threat_intel.items() %}
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">{{ source.upper() }} Data</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% if source == 'otx' %}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <table class="table table-sm">
+                                                    <tr>
+                                                        <td><strong>Pulse Count:</strong></td>
+                                                        <td>{{ data.pulse_count or 0 }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><strong>Threat Score:</strong></td>
+                                                        <td>{{ data.threat_score or 'N/A' }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><strong>Reputation:</strong></td>
+                                                        <td>
+                                                            {% if data.reputation %}
+                                                                <span class="badge severity-{{ data.reputation.reputation or 'info' }}">
+                                                                    {{ (data.reputation.reputation or 'unknown').title() }}
+                                                                </span>
+                                                            {% else %}
+                                                                <span class="text-muted">Unknown</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                            <div class="col-md-6">
+                                                {% if data.references %}
+                                                    <strong>References:</strong>
+                                                    <ul class="list-unstyled">
+                                                        {% for ref in data.references[:5] %}
+                                                            <li><a href="{{ ref }}" target="_blank" class="small">{{ ref }}</a></li>
+                                                        {% endfor %}
+                                                        {% if data.references|length > 5 %}
+                                                            <li class="small text-muted">... and {{ data.references|length - 5 }} more</li>
+                                                        {% endif %}
+                                                    </ul>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <pre class="bg-light p-2 rounded"><code>{{ data | tojson(indent=2) }}</code></pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No threat intelligence data available</p>
+                    {% endif %}
+                    
+                    {% if ioc.enrichment.risk_assessment %}
+                        <div class="mt-3">
+                            <h6>Risk Assessment</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5 class="text-{{ 'danger' if ioc.enrichment.risk_assessment.overall_risk == 'high' else 'warning' if ioc.enrichment.risk_assessment.overall_risk == 'medium' else 'success' }}">
+                                            {{ ioc.enrichment.risk_assessment.overall_risk.upper() }}
+                                        </h5>
+                                        <small>Overall Risk</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5>{{ ioc.enrichment.risk_assessment.confidence_score or 'N/A' }}</h5>
+                                        <small>Confidence Score</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5>{{ ioc.enrichment.risk_assessment.data_freshness or 'N/A' }}</h5>
+                                        <small>Data Freshness</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        No enrichment data available for this IOC
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metadata and Tags -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Metadata and Tags</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Tags</h6>
+                        {% if ioc.tags %}
+                            <div>
+                                {% for tag in ioc.tags %}
+                                    <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">No tags assigned</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Additional Metadata</h6>
+                        {% if ioc.metadata %}
+                            <table class="table table-sm">
+                                {% for key, value in ioc.metadata.items() %}
+                                    <tr>
+                                        <td><strong>{{ key }}:</strong></td>
+                                        <td>{{ value }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                        {% else %}
+                            <p class="text-muted">No additional metadata</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-primary" onclick="reanalyzeIOC()">
+                        <i class="fas fa-sync"></i> Re-analyze IOC
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="exportIOC()">
+                        <i class="fas fa-download"></i> Export IOC
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="addToWatchlist()">
+                        <i class="fas fa-eye"></i> Add to Watchlist
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" onclick="markAsFalsePositive()">
+                        <i class="fas fa-times"></i> Mark as False Positive
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related IOCs -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Related IOCs</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <i class="fas fa-link fa-2x text-muted mb-3"></i>
+                    <p class="text-muted">Related IOC correlation will be available in future versions</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis History -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Analysis History</h6>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-primary"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Created</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.created_at) }}</small>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-info"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Last Updated</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.updated_at) }}</small>
+                        </div>
+                    </div>
+                    {% if ioc.severity and ioc.severity.classified_at %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-warning"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Classified</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.severity.classified_at) }}</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 10px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -24px;
+        top: 0;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+    }
+    
+    .timeline-content {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Export IOC data
+    function exportIOC() {
+        const iocData = {{ ioc | tojson }};
+        const dataStr = JSON.stringify(iocData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `ioc_${iocData.ioc_value.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+    
+    // Re-analyze IOC
+    function reanalyzeIOC() {
+        if (confirm('Re-analyze this IOC? This will update its threat intelligence and classification.')) {
+            showLoading();
+            
+            apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/reanalyze`, {
+                method: 'POST'
+            })
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert('IOC re-analysis started. Refresh the page to see updated results.');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert('Re-analysis failed: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                alert('Re-analysis error: ' + error.message);
+            });
+        }
+    }
+    
+    // Add to watchlist
+    function addToWatchlist() {
+        alert('Watchlist feature will be available in future versions');
+    }
+    
+    // Mark as false positive
+    function markAsFalsePositive() {
+        if (confirm('Mark this IOC as a false positive? This will affect future classifications.')) {
+            alert('False positive marking will be available in future versions');
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,629 @@
+{% extends "base.html" %}
+
+{% block title %}SSH Management - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}SSH Endpoint Management{% endblock %}
+
+{% block content %}
+<style>
+.endpoint-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid #6f42c1;
+}
+.endpoint-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+.status-connected { background-color: #28a745; }
+.status-disconnected { background-color: #dc3545; }
+.status-testing { background-color: #ffc107; }
+</style>
+
+<!-- SSH Configuration Info -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="m-0 font-weight-bold">SSH Configuration</h6>
+                        <p class="text-muted mb-0">Manage SSH endpoints for IOC action execution</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEndpointModal">
+                            <i class="fas fa-plus"></i> Add Endpoint
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <strong>SSH User:</strong> <span id="sshUser">ioc_agent</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>SSH Key Path:</strong> <span id="sshKeyPath" class="text-muted">~/.ssh/id_ed25519</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        Ensure the target systems have the ioc_agent user configured with appropriate sudo permissions.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SSH Key Management -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">SSH Key Management</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Current Key:</label>
+                            <div class="input-group">
+                                <input type="text" id="currentKeyPath" class="form-control" readonly placeholder="No key loaded">
+                                <button class="btn btn-outline-secondary" onclick="loadPublicKey()">
+                                    <i class="fas fa-refresh"></i> Reload
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Public Key:</label>
+                            <textarea id="publicKey" class="form-control" rows="4" readonly placeholder="Loading public key..."></textarea>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyPublicKey()">
+                                <i class="fas fa-copy"></i> Copy Public Key
+                            </button>
+                            <button class="btn btn-sm btn-outline-info ms-2" onclick="showDeploymentInstructions()">
+                                <i class="fas fa-info-circle"></i> Show Instructions
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Generate New Key:</label>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <select id="keyType" class="form-select">
+                                        <option value="ed25519">ED25519 (Recommended)</option>
+                                        <option value="rsa">RSA (2048)</option>
+                                        <option value="ecdsa">ECDSA</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <input type="text" id="keyComment" class="form-control" placeholder="Key comment">
+                                </div>
+                            </div>
+                            <button class="btn btn-success w-100" onclick="generateSSHKey()">
+                                <i class="fas fa-key"></i> Generate New Key
+                            </button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Import Existing Key:</label>
+                            <textarea id="importPublicKey" class="form-control mb-2" rows="3" placeholder="Public key..."></textarea>
+                            <textarea id="importPrivateKey" class="form-control mb-2" rows="3" placeholder="Private key..."></textarea>
+                            <input type="text" id="importKeyName" class="form-control mb-2" placeholder="Key name (optional)">
+                            <button class="btn btn-primary w-100" onclick="importSSHKey()">
+                                <i class="fas fa-upload"></i> Import Key
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="deploymentInstructions" class="alert alert-info mt-3" style="display: none;">
+                    <h6>Manual Deployment Instructions:</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Linux/Unix:</strong>
+                            <pre id="linuxCommand" class="bg-light p-2 rounded"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Windows:</strong>
+                            <pre id="windowsCommand" class="bg-light p-2 rounded"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SSH Key Deployment -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">SSH Key Deployment</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label class="form-label">Public Key:</label>
+                            <textarea id="publicKey" class="form-control" rows="4" readonly placeholder="Loading public key..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyPublicKey()">
+                                <i class="fas fa-copy"></i> Copy Public Key
+                            </button>
+                            <button class="btn btn-sm btn-outline-info ms-2" onclick="showDeploymentInstructions()">
+                                <i class="fas fa-info-circle"></i> Show Instructions
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Quick Deploy (Password Auth)</label>
+                            <input type="text" id="deployHost" class="form-control mb-2" placeholder="Target Host IP">
+                            <input type="text" id="deployUsername" class="form-control mb-2" placeholder="Username (default: ioc_agent)">
+                            <input type="password" id="deployPassword" class="form-control mb-2" placeholder="Password">
+                            <button class="btn btn-primary w-100" onclick="deploySSHKey()">
+                                <i class="fas fa-rocket"></i> Deploy Key
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="deploymentInstructions" class="alert alert-info" style="display: none;">
+                    <h6>Manual Deployment Instructions:</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Linux/Unix:</strong>
+                            <pre id="linuxCommand" class="bg-light p-2 rounded"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Windows:</strong>
+                            <pre id="windowsCommand" class="bg-light p-2 rounded"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Endpoints List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">SSH Endpoints</h6>
+            </div>
+            <div class="card-body">
+                <div id="endpointsList" class="row">
+                    <!-- Endpoints will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Endpoint Modal -->
+<div class="modal fade" id="addEndpointModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add SSH Endpoint</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addEndpointForm">
+                    <div class="mb-3">
+                        <label for="endpointName" class="form-label">Endpoint Name</label>
+                        <input type="text" class="form-control" id="endpointName" required 
+                               placeholder="e.g., server1, workstation1">
+                    </div>
+                    <div class="mb-3">
+                        <label for="endpointIP" class="form-label">IP Address</label>
+                        <input type="text" class="form-control" id="endpointIP" required 
+                               placeholder="e.g., 192.168.1.100" pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                        <div class="form-text">Enter a valid IPv4 address</div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="setDefault">
+                        <label class="form-check-label" for="setDefault">
+                            Set as default endpoint
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addEndpoint()">Add Endpoint</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let endpoints = {};
+
+    // Load endpoints on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadEndpoints();
+    });
+
+    function apiCall(url, options = {}) {
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        };
+        return fetch(url, { ...defaultOptions, ...options })
+            .then(response => response.json());
+    }
+
+    function loadEndpoints() {
+        apiCall('/api/ssh/endpoints')
+            .then(data => {
+                if (data.success) {
+                    endpoints = data.endpoints;
+                    document.getElementById('sshUser').textContent = data.ssh_user;
+                    document.getElementById('sshKeyPath').textContent = data.ssh_key_path;
+                    renderEndpoints();
+                } else {
+                    showError('Failed to load SSH endpoints: ' + data.error);
+                }
+            })
+            .catch(error => {
+                showError('Error loading endpoints: ' + error.message);
+            });
+    }
+
+    function renderEndpoints() {
+        const container = document.getElementById('endpointsList');
+        container.innerHTML = '';
+
+        Object.entries(endpoints).forEach(([name, ip]) => {
+            const isDefault = name === 'default';
+            const endpointCard = createEndpointCard(name, ip, isDefault);
+            container.appendChild(endpointCard);
+        });
+    }
+
+    function createEndpointCard(name, ip, isDefault) {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4 mb-3';
+        
+        col.innerHTML = `
+            <div class="card endpoint-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-title">
+                                ${isDefault ? '<span class="badge bg-primary">Default</span>' : ''}
+                                ${name}
+                            </h6>
+                            <p class="card-text">
+                                <i class="fas fa-network-wired"></i> ${ip}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="status-indicator status-disconnected" id="status-${name}"></span>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="testConnection('${name}', '${ip}')" title="Test Connection">
+                                    <i class="fas fa-plug"></i>
+                                </button>
+                                ${!isDefault ? `<button class="btn btn-outline-danger" onclick="removeEndpoint('${name}')" title="Remove">
+                                    <i class="fas fa-trash"></i>
+                                </button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        return col;
+    }
+
+    function addEndpoint() {
+        const form = document.getElementById('addEndpointForm');
+        const name = document.getElementById('endpointName').value;
+        const ip = document.getElementById('endpointIP').value;
+        const setDefault = document.getElementById('setDefault').checked;
+
+        if (!name || !ip) {
+            showError('Please fill in all fields');
+            return;
+        }
+
+        const data = {
+            name: name,
+            ip: ip,
+            set_as_default: setDefault
+        };
+
+        apiCall('/api/ssh/endpoints', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (response.success) {
+                showSuccess('Endpoint added successfully');
+                bootstrap.Modal.getInstance(document.getElementById('addEndpointModal')).hide();
+                form.reset();
+                loadEndpoints();
+            } else {
+                showError('Failed to add endpoint: ' + response.error);
+            }
+        })
+        .catch(error => {
+            showError('Error adding endpoint: ' + error.message);
+        });
+    }
+
+    function testConnection(name, ip) {
+        const statusIndicator = document.getElementById(`status-${name}`);
+        statusIndicator.className = 'status-indicator status-testing';
+
+        apiCall('/api/ssh/test', {
+            method: 'POST',
+            body: JSON.stringify({ host: ip })
+        })
+        .then(response => {
+            if (response.success) {
+                const result = response.test_result;
+                if (result.connected) {
+                    statusIndicator.className = 'status-indicator status-connected';
+                    showSuccess(`Connected to ${name} (${result.user || 'ioc_agent'})`);
+                } else {
+                    statusIndicator.className = 'status-indicator status-disconnected';
+                    showError(`Failed to connect to ${name}: ${result.error}`);
+                }
+            } else {
+                statusIndicator.className = 'status-indicator status-disconnected';
+                showError(`Connection test failed: ${response.error}`);
+            }
+        })
+        .catch(error => {
+            statusIndicator.className = 'status-indicator status-disconnected';
+            showError('Error testing connection: ' + error.message);
+        });
+    }
+
+    function removeEndpoint(name) {
+        if (confirm(`Are you sure you want to remove endpoint "${name}"?`)) {
+            // This would need a DELETE endpoint implementation
+            showError('Remove functionality not yet implemented');
+        }
+    }
+
+    function showSuccess(message) {
+        // Create or update success alert
+        let alert = document.getElementById('successAlert');
+        if (!alert) {
+            alert = document.createElement('div');
+            alert.id = 'successAlert';
+            alert.className = 'alert alert-success alert-dismissible fade show';
+            alert.innerHTML = `
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <span id="successMessage"></span>
+            `;
+            // Insert after the first row in main content
+            const mainContent = document.querySelector('main .container-fluid') || document.querySelector('.container-fluid');
+            const firstRow = mainContent.querySelector('.row');
+            if (firstRow) {
+                mainContent.insertBefore(alert, firstRow);
+            } else {
+                mainContent.appendChild(alert);
+            }
+        }
+        document.getElementById('successMessage').textContent = message;
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            if (alert) alert.remove();
+        }, 3000);
+    }
+
+    // SSH Key Management Functions
+    function loadPublicKey() {
+        fetch('/api/ssh/public-key')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError('Failed to load public key: ' + data.error);
+                    document.getElementById('currentKeyPath').value = 'Error loading key';
+                } else {
+                    document.getElementById('publicKey').value = data.public_key;
+                    document.getElementById('currentKeyPath').value = data.key_path;
+                    document.getElementById('linuxCommand').textContent = data.deployment_instructions.linux;
+                    document.getElementById('windowsCommand').textContent = data.deployment_instructions.windows;
+                }
+            })
+            .catch(error => {
+                showError('Error loading public key: ' + error.message);
+            });
+    }
+
+    function copyPublicKey() {
+        const publicKeyField = document.getElementById('publicKey');
+        publicKeyField.select();
+        document.execCommand('copy');
+        showSuccess('Public key copied to clipboard!');
+    }
+
+    function showDeploymentInstructions() {
+        const instructions = document.getElementById('deploymentInstructions');
+        instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function generateSSHKey() {
+        const keyType = document.getElementById('keyType').value;
+        const keyComment = document.getElementById('keyComment').value || 'pulselens@localhost';
+
+        const generateBtn = event.target;
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+        fetch('/api/ssh/generate-key', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                key_type: keyType,
+                comment: keyComment
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess('SSH key generated successfully!');
+                // Update UI with new key
+                document.getElementById('publicKey').value = data.public_key;
+                document.getElementById('currentKeyPath').value = data.key_path;
+                // Clear comment field
+                document.getElementById('keyComment').value = '';
+            } else {
+                showError('Key generation failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            showError('Error generating key: ' + error.message);
+        })
+        .finally(() => {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="fas fa-key"></i> Generate New Key';
+        });
+    }
+
+    function importSSHKey() {
+        const publicKey = document.getElementById('importPublicKey').value.trim();
+        const privateKey = document.getElementById('importPrivateKey').value.trim();
+        const keyName = document.getElementById('importKeyName').value.trim() || 'imported_key';
+
+        if (!publicKey || !privateKey) {
+            showError('Both public and private keys are required');
+            return;
+        }
+
+        const importBtn = event.target;
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+
+        fetch('/api/ssh/import-key', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                public_key: publicKey,
+                private_key: privateKey,
+                key_name: keyName
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess('SSH key imported successfully!');
+                // Update UI with imported key
+                document.getElementById('publicKey').value = publicKey;
+                document.getElementById('currentKeyPath').value = data.key_path;
+                // Clear import fields
+                document.getElementById('importPublicKey').value = '';
+                document.getElementById('importPrivateKey').value = '';
+                document.getElementById('importKeyName').value = '';
+            } else {
+                showError('Key import failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            showError('Error importing key: ' + error.message);
+        })
+        .finally(() => {
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-upload"></i> Import Key';
+        });
+    }
+
+    // SSH Key Deployment Functions
+    function deploySSHKey() {
+        const host = document.getElementById('deployHost').value;
+        const username = document.getElementById('deployUsername').value || 'ioc_agent';
+        const password = document.getElementById('deployPassword').value;
+
+        if (!host || !password) {
+            showError('Host and password are required for key deployment');
+            return;
+        }
+
+        const deployBtn = event.target;
+        deployBtn.disabled = true;
+        deployBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deploying...';
+
+        fetch('/api/ssh/deploy-key', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                host: host,
+                username: username,
+                password: password
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess('SSH key deployed successfully to ' + host);
+                // Clear password field
+                document.getElementById('deployPassword').value = '';
+                // Test the connection after deployment
+                setTimeout(() => testConnection(host), 1000);
+            } else {
+                showError('Deployment failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            showError('Error deploying key: ' + error.message);
+        })
+        .finally(() => {
+            deployBtn.disabled = false;
+            deployBtn.innerHTML = '<i class="fas fa-rocket"></i> Deploy Key';
+        });
+    }
+
+    // Load public key when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadPublicKey();
+        loadEndpoints();
+    });
+
+    function showError(message) {
+        // Create or update error alert
+        let alert = document.getElementById('errorAlert');
+        if (!alert) {
+            alert = document.createElement('div');
+            alert.id = 'errorAlert';
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <span id="errorMessage"></span>
+            `;
+            // Insert after the first row in main content
+            const mainContent = document.querySelector('main .container-fluid') || document.querySelector('.container-fluid');
+            const firstRow = mainContent.querySelector('.row');
+            if (firstRow) {
+                mainContent.insertBefore(alert, firstRow);
+            } else {
+                mainContent.appendChild(alert);
+            }
+        }
+        document.getElementById('errorMessage').textContent = message;
+    }
+</script>
+{% endblock %}

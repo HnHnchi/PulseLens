@@ -1,0 +1,25 @@
+# Sample IOC data for PulseLens testing
+# IP addresses
+45.77.89.12
+192.168.1.100
+10.0.0.1
+
+# Domains
+malicious-example.com
+suspicious-site.net
+legitimate-business.org
+
+# URLs
+http://malicious-example.com/malware
+https://suspicious-site.net/phishing
+http://legitimate-business.org/normal
+
+# File hashes
+44d88612fea8a8f36de82e1278abb02f  # EICAR test file
+d41d8cd98f00b204e9800998ecf8427e  # Empty file MD5
+5d41402abc4b2a76b9719d911017c592  # "hello" MD5
+
+# Emails
+attacker@malicious.com
+user@suspicious-site.net
+admin@legitimate-business.org

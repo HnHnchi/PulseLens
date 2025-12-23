@@ -1,0 +1,1 @@
+{"ssh_key_path": "~/.ssh/id_ed25519", "ssh_user": "ioc_agent", "default_timeout": 30, "endpoints": {"default": "127.0.0.1", "server1": "192.168.1.100", "workstation1": "192.168.1.101"}, "security": {"require_verification": true, "log_all_commands": true, "max_concurrent_connections": 5}}

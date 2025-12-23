@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}Analyze IOCs - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}IOC Analysis{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Submit IOCs for Analysis</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="analyzeForm">
+                    <div class="mb-3">
+                        <label for="input_type" class="form-label">Input Type</label>
+                        <select class="form-select" id="input_type" name="input_type" onchange="toggleInputType()">
+                            <option value="text">Text Input</option>
+                            <option value="file">File Upload</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Text Input -->
+                    <div id="textInput">
+                        <div class="mb-3">
+                            <label for="ioc_input" class="form-label">IOC Data</label>
+                            <textarea class="form-control" id="ioc_input" name="ioc_input" rows="12" 
+                                      placeholder="Enter IOCs one per line or comma-separated.&#10;Supported types: IP addresses, domains, URLs, file hashes, email addresses&#10;&#10;Example:&#10;45.77.89.12&#10;malicious.com&#10;http://malicious.com/malware&#10;44d88612fea8a8f36de82e1278abb02f&#10;attacker@malicious.com"></textarea>
+                            <div class="form-text">
+                                <small>
+                                    <i class="fas fa-info-circle"></i>
+                                    Enter IOCs one per line or comma-separated. 
+                                    Supports IP addresses, domains, URLs, file hashes (MD5, SHA1, SHA256), and email addresses.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- File Input -->
+                    <div id="fileInput" style="display: none;">
+                        <div class="mb-3">
+                            <label for="ioc_file" class="form-label">IOC File</label>
+                            <input type="file" class="form-control" id="ioc_file" name="ioc_file" 
+                                   accept=".txt,.json,.csv">
+                            <div class="form-text">
+                                <small>
+                                    <i class="fas fa-info-circle"></i>
+                                    Upload a file containing IOCs. 
+                                    Supported formats: TXT, JSON, CSV
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Options -->
+                    <div class="collapse" id="advancedOptions">
+                        <div class="card card-body bg-light">
+                            <h6>Advanced Options</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="feed_source" class="form-label">Feed Source</label>
+                                        <input type="text" class="form-control" id="feed_source" name="feed_source" 
+                                               placeholder="Optional feed source name">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="confidence" class="form-label">Default Confidence</label>
+                                        <select class="form-select" id="confidence" name="confidence">
+                                            <option value="low">Low</option>
+                                            <option value="medium" selected>Medium</option>
+                                            <option value="high">High</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="use_cache" name="use_cache" checked>
+                                <label class="form-check-label" for="use_cache">
+                                    Use cached enrichment results
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="save_to_db" name="save_to_db" checked>
+                                <label class="form-check-label" for="save_to_db">
+                                    Save results to database
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#advancedOptions">
+                            <i class="fas fa-cog"></i> Advanced Options
+                        </button>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary" onclick="validateInput()">
+                                <i class="fas fa-check"></i> Validate
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Analyze IOCs
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Validation Results -->
+        <div class="card mt-4" id="validationResults" style="display: none;">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Validation Results</h6>
+            </div>
+            <div class="card-body">
+                <div id="validationContent">
+                    <!-- Validation results will be displayed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Quick Help -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Quick Help</h6>
+            </div>
+            <div class="card-body">
+                <h6>Supported IOC Types</h6>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-globe severity-info"></i> <strong>IP Address:</strong> 192.168.1.1</li>
+                    <li><i class="fas fa-globe severity-info"></i> <strong>Domain:</strong> example.com</li>
+                    <li><i class="fas fa-globe severity-info"></i> <strong>URL:</strong> http://example.com/path</li>
+                    <li><i class="fas fa-globe severity-info"></i> <strong>Hash:</strong> MD5, SHA1, SHA256</li>
+                    <li><i class="fas fa-globe severity-info"></i> <strong>Email:</strong> user@example.com</li>
+                </ul>
+                
+                <h6 class="mt-3">Analysis Process</h6>
+                <ol class="small">
+                    <li>Input validation and format checking</li>
+                    <li>Normalization to standard format</li>
+                    <li>Threat intelligence enrichment</li>
+                    <li>Severity classification</li>
+                    <li>Report generation</li>
+                </ol>
+                
+                <div class="alert alert-info mt-3">
+                    <small>
+                        <i class="fas fa-info-circle"></i>
+                        Analysis typically takes 10-30 seconds depending on the number of IOCs and API response times.
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sample Data -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Sample Data</h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Click below to load sample IOCs for testing:</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadSampleData('mixed')">
+                        <i class="fas fa-flask"></i> Mixed IOCs
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadSampleData('ips')">
+                        <i class="fas fa-network-wired"></i> IP Addresses
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadSampleData('domains')">
+                        <i class="fas fa-globe"></i> Domains
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadSampleData('hashes')">
+                        <i class="fas fa-fingerprint"></i> File Hashes
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Analyses -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Recent Analyses</h6>
+            </div>
+            <div class="card-body">
+                <div id="recentAnalyses">
+                    <div class="text-center">
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                        <small class="d-block mt-2 text-muted">Loading recent analyses...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Progress Modal -->
+<div class="modal fade" id="analysisModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Analyzing IOCs</h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <h6>Analysis in Progress</h6>
+                    <p class="text-muted">Please wait while we analyze your IOCs...</p>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle input type
+    function toggleInputType() {
+        const inputType = document.getElementById('input_type').value;
+        const textInput = document.getElementById('textInput');
+        const fileInput = document.getElementById('fileInput');
+        
+        if (inputType === 'text') {
+            textInput.style.display = 'block';
+            fileInput.style.display = 'none';
+        } else {
+            textInput.style.display = 'none';
+            fileInput.style.display = 'block';
+        }
+    }
+    
+    // Load sample data
+    function loadSampleData(type) {
+        const sampleData = {
+            mixed: `45.77.89.12
+192.168.1.100
+malicious-example.com
+suspicious-site.net
+http://malicious-example.com/malware
+https://suspicious-site.net/phishing
+44d88612fea8a8f36de82e1278abb02f
+d41d8cd98f00b204e9800998ecf8427e
+attacker@malicious.com
+user@suspicious-site.net`,
+            ips: `45.77.89.12
+192.168.1.100
+10.0.0.1
+203.0.113.1
+198.51.100.1
+172.16.0.1`,
+            domains: `malicious-example.com
+suspicious-site.net
+legitimate-business.org
+phishing-attempt.tk
+malware-distribution.net
+c2-server.org`,
+            hashes: `44d88612fea8a8f36de82e1278abb02f
+d41d8cd98f00b204e9800998ecf8427e
+5d41402abc4b2a76b9719d911017c592
+e3b0c44298fc1c149afbf4c8996fb924
+279a321e7c6b8a5e3e5e3e5e3e5e3e5e3e5e5e5`
+        };
+        
+        document.getElementById('ioc_input').value = sampleData[type] || '';
+    }
+    
+    // Validate input
+    function validateInput() {
+        const inputType = document.getElementById('input_type').value;
+        let inputData;
+        
+        if (inputType === 'text') {
+            inputData = document.getElementById('ioc_input').value.trim();
+        } else {
+            const fileInput = document.getElementById('ioc_file');
+            if (fileInput.files.length === 0) {
+                alert('Please select a file');
+                return;
+            }
+            // For file validation, we'd need to read the file content
+            alert('File validation will be implemented');
+            return;
+        }
+        
+        if (!inputData) {
+            alert('Please provide IOC data');
+            return;
+        }
+        
+        // Show validation results
+        const validationResults = document.getElementById('validationResults');
+        const validationContent = document.getElementById('validationContent');
+        
+        validationResults.style.display = 'block';
+        validationContent.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>';
+        
+        // Call validation API
+        apiCall('/api/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ioc_input: inputData,
+                input_type: inputType
+            })
+        })
+        .then(data => {
+            validationContent.innerHTML = `
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h5 class="text-success">${data.valid_count || 0}</h5>
+                            <small>Valid IOCs</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h5 class="text-warning">${data.invalid_count || 0}</h5>
+                            <small>Invalid IOCs</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h5 class="text-info">${data.duplicate_count || 0}</h5>
+                            <small>Duplicates</small>
+                        </div>
+                    </div>
+                </div>
+                ${data.invalid_iocs && data.invalid_iocs.length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Invalid IOCs:</h6>
+                        <div class="alert alert-warning">
+                            ${data.invalid_iocs.map(ioc => `<code>${ioc.value}</code> - ${ioc.reason}`).join('<br>')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+        })
+        .catch(error => {
+            validationContent.innerHTML = '<div class="alert alert-danger">Validation failed</div>';
+        });
+    }
+    
+    // Handle form submission
+    document.getElementById('analyzeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const inputType = document.getElementById('input_type').value;
+        let inputData;
+        
+        if (inputType === 'text') {
+            inputData = document.getElementById('ioc_input').value.trim();
+            if (!inputData) {
+                alert('Please provide IOC data');
+                return;
+            }
+        } else {
+            const fileInput = document.getElementById('ioc_file');
+            if (fileInput.files.length === 0) {
+                alert('Please select a file');
+                return;
+            }
+            // For file submission, we'd need to handle file upload
+            alert('File upload will be implemented');
+            return;
+        }
+        
+        // Show analysis modal
+        const analysisModal = new bootstrap.Modal(document.getElementById('analysisModal'));
+        analysisModal.show();
+        
+        // Submit analysis
+        fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ioc_input: inputData,
+                input_type: inputType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            analysisModal.hide();
+            
+            if (data.status === 'success') {
+                // Redirect to results page
+                window.location.href = `/analysis/${data.analysis_id}`;
+            } else {
+                alert(`Analysis failed: ${data.error || 'Unknown error'}`);
+            }
+        })
+        .catch(error => {
+            analysisModal.hide();
+            console.error('Analysis error:', error);
+            alert('Analysis failed. Please try again.');
+        });
+    });
+    
+    // Load recent analyses on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // This would load recent analyses from the API
+        setTimeout(() => {
+            document.getElementById('recentAnalyses').innerHTML = `
+                <div class="text-center text-muted">
+                    <small>No recent analyses found</small>
+                </div>
+            `;
+        }, 1000);
+    });
+</script>
+{% endblock %}

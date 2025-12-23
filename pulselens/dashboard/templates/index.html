@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}PulseLens Dashboard - Overview{% endblock %}
+
+{% block page_title %}Dashboard Overview{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="text-uppercase text-muted mb-1">Total IOCs</h5>
+                        <span class="h2 mb-0">{{ stats.total_iocs }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-shield-alt fa-2x text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card critical">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="text-uppercase text-muted mb-1">High Risk</h5>
+                        <span class="h2 mb-0">{{ stats.high_risk_count }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-2x severity-critical"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="text-uppercase text-muted mb-1">Recent Analyses</h5>
+                        <span class="h2 mb-0">{{ stats.recent_analyses }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-line fa-2x text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="text-uppercase text-muted mb-1">Cache Entries</h5>
+                        <span class="h2 mb-0">{{ stats.cache_entries }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-database fa-2x text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Severity Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">IOC Type Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="typeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Recent IOCs</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_iocs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>IOC Value</th>
+                                    <th>Type</th>
+                                    <th>Severity</th>
+                                    <th>Last Seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ioc in recent_iocs %}
+                                <tr>
+                                    <td>
+                                        <span class="ioc-value">{{ formatIOC(ioc.ioc_value, 40) }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ ioc.ioc_type.upper() }}</span>
+                                    </td>
+                                    <td>
+                                        {% set severity_level = ioc.severity.level if ioc.severity else 'info' %}
+                                        <span class="badge severity-{{ severity_level }} badge-severity">
+                                            {{ severity_level.upper() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>{{ formatDateTime(ioc.updated_at) }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('ioc_detail', ioc_value=ioc.ioc_value) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('ioc_list') }}" class="btn btn-primary">
+                            View All IOCs <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No recent IOCs found</p>
+                        <a href="{{ url_for('analyze') }}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Analyze IOCs
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Recent Analyses</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_analyses %}
+                    {% for analysis in recent_analyses %}
+                    <div class="border-bottom pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Analysis {{ analysis.analysis_id[:8] }}...</h6>
+                                <small class="text-muted">{{ formatDateTime(analysis.created_at) }}</small>
+                            </div>
+                            <span class="badge bg-primary">{{ analysis.ioc_count }} IOCs</span>
+                        </div>
+                        {% if analysis.severity_summary %}
+                            <div class="mt-2">
+                                {% for level, count in analysis.severity_summary.severity_distribution.items() %}
+                                    {% if count > 0 %}
+                                        <span class="badge severity-{{ level }} badge-severity me-1">
+                                            {{ level }}: {{ count }}
+                                        </span>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('reports') }}" class="btn btn-primary">
+                            View All Reports <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No recent analyses</p>
+                        <a href="{{ url_for('analyze') }}" class="btn btn-primary">
+                            <i class="fas fa-play"></i> Start Analysis
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('analyze') }}" class="btn btn-primary">
+                        <i class="fas fa-search"></i> New Analysis
+                    </a>
+                    <a href="{{ url_for('ioc_list') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-list"></i> Browse IOCs
+                    </a>
+                    <a href="{{ url_for('reports') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-file-alt"></i> View Reports
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> Refresh Dashboard
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Severity Distribution Chart
+    const severityCtx = document.getElementById('severityChart');
+    const severityData = {{ stats.severity_distribution | tojson | safe }};
+    
+    if (severityCtx && severityData && Object.keys(severityData).length > 0) {
+        // Define the correct order and colors for severity levels
+        const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
+        const severityColors = {
+            'critical': '#dc3545',  // red
+            'high': '#fd7e14',      // orange  
+            'medium': '#ffc107',    // yellow
+            'low': '#28a745',       // green
+            'info': '#17a2b8'       // light blue
+        };
+        
+        // Get labels and data in the correct order
+        const labels = severityOrder.filter(level => severityData.hasOwnProperty(level));
+        const data = labels.map(level => severityData[level]);
+        const colors = labels.map(level => severityColors[level]);
+        
+        new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } else {
+        console.error('Severity chart data or context not available:', severityData);
+    }
+    
+    // IOC Type Distribution Chart
+    const typeCtx = document.getElementById('typeChart');
+    const typeData = {{ stats.type_distribution | tojson | safe }};
+    
+    if (typeCtx && typeData && Object.keys(typeData).length > 0) {
+        new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(typeData),
+                datasets: [{
+                    label: 'Count',
+                    data: Object.values(typeData),
+                    backgroundColor: '#6f42c1',
+                    borderColor: '#5a32a3',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    } else {
+        console.error('Type chart data or context not available:', typeData);
+    }
+    
+    // Auto-refresh dashboard every 30 seconds
+    setInterval(function() {
+        apiCall('/api/stats')
+            .then(data => {
+                // Update stats cards
+                document.querySelector('.stats-card:first-child .h2').textContent = data.total_iocs;
+                document.querySelector('.stats-card.critical .h2').textContent = data.high_risk_count;
+                document.querySelector('.stats-card:nth-child(3) .h2').textContent = data.recent_analyses;
+                document.querySelector('.stats-card:last-child .h2').textContent = data.cache_entries;
+            })
+            .catch(error => {
+                console.error('Failed to refresh stats:', error);
+            });
+    }, 30000);
+</script>
+{% endblock %}

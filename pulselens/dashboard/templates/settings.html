@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}System Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- API Configuration -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">API Configuration</h6>
+            </div>
+            <div class="card-body">
+                <form id="apiSettingsForm">
+                    <div class="mb-3">
+                        <label for="otxApiKey" class="form-label">OTX API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="otxApiKey" name="otxApiKey" 
+                                   value="{{ config.OTX_API_KEY or '' }}" placeholder="Enter OTX API key">
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('otxApiKey')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <small>API key for AlienVault Open Threat Exchange. Leave empty to skip OTX enrichment.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="otxRateLimit" class="form-label">OTX Rate Limit (requests/minute)</label>
+                        <input type="number" class="form-control" id="otxRateLimit" name="otxRateLimit" 
+                               value="{{ config.OTX_RATE_LIMIT or 60 }}" min="1" max="100">
+                        <div class="form-text">
+                            <small>Maximum number of API requests per minute to OTX.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="otxBaseUrl" class="form-label">OTX Base URL</label>
+                        <input type="url" class="form-control" id="otxBaseUrl" name="otxBaseUrl" 
+                               value="{{ config.OTX_BASE_URL or 'https://otx.alienvault.com/api/v1' }}">
+                        <div class="form-text">
+                            <small>Base URL for OTX API endpoint.</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Database Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Database Settings</h6>
+            </div>
+            <div class="card-body">
+                <form id="dbSettingsForm">
+                    <div class="mb-3">
+                        <label for="databasePath" class="form-label">Database Path</label>
+                        <input type="text" class="form-control" id="databasePath" name="databasePath" 
+                               value="{{ config.DATABASE_PATH or 'data/cache.db' }}">
+                        <div class="form-text">
+                            <small>Path to SQLite database file.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cacheExpiry" class="form-label">Cache Expiry (hours)</label>
+                        <input type="number" class="form-control" id="cacheExpiry" name="cacheExpiry" 
+                               value="{{ config.CACHE_EXPIRY_HOURS or 24 }}" min="1" max="168">
+                        <div class="form-text">
+                            <small>How long to cache API responses before refreshing.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="autoCleanup" name="autoCleanup" 
+                                   {% if config.get('AUTO_CLEANUP_CACHE', True) %}checked{% endif %}>
+                            <label class="form-check-label" for="autoCleanup">
+                                Automatically cleanup expired cache entries
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Classification Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Classification Settings</h6>
+            </div>
+            <div class="card-body">
+                <form id="classificationSettingsForm">
+                    <div class="mb-3">
+                        <label for="defaultConfidence" class="form-label">Default Confidence Level</label>
+                        <select class="form-select" id="defaultConfidence" name="defaultConfidence">
+                            <option value="low" {% if config.get('DEFAULT_CONFIDENCE', 'medium') == 'low' %}selected{% endif %}>Low</option>
+                            <option value="medium" {% if config.get('DEFAULT_CONFIDENCE', 'medium') == 'medium' %}selected{% endif %}>Medium</option>
+                            <option value="high" {% if config.get('DEFAULT_CONFIDENCE', 'medium') == 'high' %}selected{% endif %}>High</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Severity Thresholds</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="criticalThreshold" class="form-label">Critical (≥)</label>
+                                <input type="number" class="form-control" id="criticalThreshold" name="criticalThreshold" 
+                                       value="{{ config.SEVERITY_THRESHOLDS.get('critical', {}).get('min_score', 8) }}" min="0" max="10" step="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="highThreshold" class="form-label">High (≥)</label>
+                                <input type="number" class="form-control" id="highThreshold" name="highThreshold" 
+                                       value="{{ config.SEVERITY_THRESHOLDS.get('high', {}).get('min_score', 6) }}" min="0" max="10" step="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="mediumThreshold" class="form-label">Medium (≥)</label>
+                                <input type="number" class="form-control" id="mediumThreshold" name="mediumThreshold" 
+                                       value="{{ config.SEVERITY_THRESHOLDS.get('medium', {}).get('min_score', 4) }}" min="0" max="10" step="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="lowThreshold" class="form-label">Low (≥)</label>
+                                <input type="number" class="form-control" id="lowThreshold" name="lowThreshold" 
+                                       value="{{ config.SEVERITY_THRESHOLDS.get('low', {}).get('min_score', 2) }}" min="0" max="10" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Dashboard Settings</h6>
+            </div>
+            <div class="card-body">
+                <form id="dashboardSettingsForm">
+                    <div class="mb-3">
+                        <label for="dashboardHost" class="form-label">Dashboard Host</label>
+                        <input type="text" class="form-control" id="dashboardHost" name="dashboardHost" 
+                               value="{{ config.get('DASHBOARD_HOST', '127.0.0.1') }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="dashboardPort" class="form-label">Dashboard Port</label>
+                        <input type="number" class="form-control" id="dashboardPort" name="dashboardPort" 
+                               value="{{ config.get('DASHBOARD_PORT', 5000) }}" min="1" max="65535">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="dashboardDebug" name="dashboardDebug" 
+                                   {% if config.get('DASHBOARD_DEBUG', False) %}checked{% endif %}>
+                            <label class="form-check-label" for="dashboardDebug">
+                                Enable debug mode
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-primary" onclick="saveAllSettings()">
+                        <i class="fas fa-save"></i> Save All Settings
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" onclick="resetToDefaults()">
+                        <i class="fas fa-undo"></i> Reset to Defaults
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="exportSettings()">
+                        <i class="fas fa-download"></i> Export Settings
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="importSettings()">
+                        <i class="fas fa-upload"></i> Import Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">System Information</h6>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Version:</strong></td>
+                        <td>1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Python:</strong></td>
+                        <td>3.13+</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Database:</strong></td>
+                        <td>SQLite</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cache:</strong></td>
+                        <td>{{ config.CACHE_EXPIRY_HOURS or 24 }}h expiry</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">System Status</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>OTX API</span>
+                        <span class="badge bg-success">Connected</span>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Database</span>
+                        <span class="badge bg-success">Healthy</span>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Cache</span>
+                        <span class="badge bg-success">Active</span>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>File System</span>
+                        <span class="badge bg-success">OK</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden file input for settings import -->
+<input type="file" id="settingsImportFile" style="display: none;" accept=".json">
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle password visibility
+    function togglePasswordVisibility(fieldId) {
+        const field = document.getElementById(fieldId);
+        const icon = event.target.querySelector('i') || event.target;
+        
+        if (field.type === 'password') {
+            field.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            field.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+    
+    // Show loading spinner
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+    
+    // Hide loading spinner
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+    
+    // Show notification
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 10000; min-width: 300px;';
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+    
+    // Save all settings
+    function saveAllSettings() {
+        const settings = {
+            api: {
+                otx_api_key: document.getElementById('otxApiKey').value,
+                otx_rate_limit: parseInt(document.getElementById('otxRateLimit').value),
+                otx_base_url: document.getElementById('otxBaseUrl').value
+            },
+            database: {
+                database_path: document.getElementById('databasePath').value,
+                cache_expiry_hours: parseInt(document.getElementById('cacheExpiry').value),
+                auto_cleanup_cache: document.getElementById('autoCleanup').checked
+            },
+            classification: {
+                default_confidence: document.getElementById('defaultConfidence').value,
+                severity_thresholds: {
+                    critical: { min_score: parseFloat(document.getElementById('criticalThreshold').value) },
+                    high: { min_score: parseFloat(document.getElementById('highThreshold').value) },
+                    medium: { min_score: parseFloat(document.getElementById('mediumThreshold').value) },
+                    low: { min_score: parseFloat(document.getElementById('lowThreshold').value) }
+                }
+            },
+            dashboard: {
+                host: document.getElementById('dashboardHost').value,
+                port: parseInt(document.getElementById('dashboardPort').value),
+                debug: document.getElementById('dashboardDebug').checked
+            }
+        };
+        
+        showLoading();
+        
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification('Settings saved successfully!', 'success');
+            } else {
+                showNotification('Failed to save settings: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showNotification('Save settings error: ' + error.message, 'error');
+        });
+    }
+    
+    // Reset to defaults
+    function resetToDefaults() {
+        if (confirm('Are you sure you want to reset all settings to default values?')) {
+            // Reset form values to defaults
+            document.getElementById('otxApiKey').value = '';
+            document.getElementById('otxRateLimit').value = '60';
+            document.getElementById('otxBaseUrl').value = 'https://otx.alienvault.com/api/v1';
+            document.getElementById('databasePath').value = 'data/cache.db';
+            document.getElementById('cacheExpiry').value = '24';
+            document.getElementById('autoCleanup').checked = true;
+            document.getElementById('defaultConfidence').value = 'medium';
+            document.getElementById('criticalThreshold').value = '8';
+            document.getElementById('highThreshold').value = '6';
+            document.getElementById('mediumThreshold').value = '4';
+            document.getElementById('lowThreshold').value = '2';
+            document.getElementById('dashboardHost').value = '127.0.0.1';
+            document.getElementById('dashboardPort').value = '5000';
+            document.getElementById('dashboardDebug').checked = false;
+            
+            showNotification('Settings reset to defaults. Click "Save All Settings" to apply.', 'info');
+        }
+    }
+    
+    // Export settings
+    function exportSettings() {
+        const settings = {
+            api: {
+                otx_api_key: document.getElementById('otxApiKey').value,
+                otx_rate_limit: parseInt(document.getElementById('otxRateLimit').value),
+                otx_base_url: document.getElementById('otxBaseUrl').value
+            },
+            database: {
+                database_path: document.getElementById('databasePath').value,
+                cache_expiry_hours: parseInt(document.getElementById('cacheExpiry').value),
+                auto_cleanup_cache: document.getElementById('autoCleanup').checked
+            },
+            classification: {
+                default_confidence: document.getElementById('defaultConfidence').value,
+                severity_thresholds: {
+                    critical: { min_score: parseFloat(document.getElementById('criticalThreshold').value) },
+                    high: { min_score: parseFloat(document.getElementById('highThreshold').value) },
+                    medium: { min_score: parseFloat(document.getElementById('mediumThreshold').value) },
+                    low: { min_score: parseFloat(document.getElementById('lowThreshold').value) }
+                }
+            },
+            dashboard: {
+                host: document.getElementById('dashboardHost').value,
+                port: parseInt(document.getElementById('dashboardPort').value),
+                debug: document.getElementById('dashboardDebug').checked
+            },
+            exported_at: new Date().toISOString(),
+            version: '1.0.0'
+        };
+        
+        const dataStr = JSON.stringify(settings, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `pulselens_settings_${new Date().toISOString().split('T')[0]}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+    
+    // Import settings
+    function importSettings() {
+        const fileInput = document.getElementById('settingsImportFile');
+        fileInput.click();
+        
+        fileInput.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const settings = JSON.parse(event.target.result);
+                        
+                        // Apply imported settings to form
+                        if (settings.api) {
+                            document.getElementById('otxApiKey').value = settings.api.otx_api_key || '';
+                            document.getElementById('otxRateLimit').value = settings.api.otx_rate_limit || 60;
+                            document.getElementById('otxBaseUrl').value = settings.api.otx_base_url || 'https://otx.alienvault.com/api/v1';
+                        }
+                        
+                        if (settings.database) {
+                            document.getElementById('databasePath').value = settings.database.database_path || 'data/cache.db';
+                            document.getElementById('cacheExpiry').value = settings.database.cache_expiry_hours || 24;
+                            document.getElementById('autoCleanup').checked = settings.database.auto_cleanup_cache !== false;
+                        }
+                        
+                        if (settings.classification) {
+                            document.getElementById('defaultConfidence').value = settings.classification.default_confidence || 'medium';
+                            if (settings.classification.severity_thresholds) {
+                                document.getElementById('criticalThreshold').value = settings.classification.severity_thresholds.critical?.min_score || 8;
+                                document.getElementById('highThreshold').value = settings.classification.severity_thresholds.high?.min_score || 6;
+                                document.getElementById('mediumThreshold').value = settings.classification.severity_thresholds.medium?.min_score || 4;
+                                document.getElementById('lowThreshold').value = settings.classification.severity_thresholds.low?.min_score || 2;
+                            }
+                        }
+                        
+                        if (settings.dashboard) {
+                            document.getElementById('dashboardHost').value = settings.dashboard.host || '127.0.0.1';
+                            document.getElementById('dashboardPort').value = settings.dashboard.port || 5000;
+                            document.getElementById('dashboardDebug').checked = settings.dashboard.debug || false;
+                        }
+                        
+                        showNotification('Settings imported successfully! Click "Save All Settings" to apply.', 'success');
+                        
+                    } catch (error) {
+                        showNotification('Failed to import settings: Invalid JSON format', 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+    }
+</script>
+{% endblock %}

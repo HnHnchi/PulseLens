@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PulseLens Dashboard{% endblock %}</title>
+    
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: #6f42c1 !important;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            transition: box-shadow 0.15s ease-in-out;
+        }
+        .card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        .severity-critical { color: #dc3545; }
+        .severity-high { color: #fd7e14; }
+        .severity-medium { color: #ffc107; }
+        .severity-low { color: #28a745; }
+        .severity-info { color: #17a2b8; }
+        
+        .stats-card {
+            border-left: 4px solid #6f42c1;
+        }
+        .stats-card.critical { border-left-color: #dc3545; }
+        .stats-card.high { border-left-color: #fd7e14; }
+        .stats-card.medium { border-left-color: #ffc107; }
+        .stats-card.low { border-left-color: #28a745; }
+        .stats-card.info { border-left-color: #17a2b8; }
+        
+        .ioc-value {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .badge-severity {
+            font-size: 0.75em;
+        }
+        
+        /* Flying Notifications */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        }
+        
+        .notification {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 10px;
+            padding: 16px;
+            border-left: 4px solid #6f42c1;
+            animation: slideIn 0.3s ease-out;
+            transition: all 0.3s ease;
+        }
+        
+        .notification.success {
+            border-left-color: #28a745;
+        }
+        
+        .notification.error {
+            border-left-color: #dc3545;
+        }
+        
+        .notification.warning {
+            border-left-color: #ffc107;
+        }
+        
+        .notification.info {
+            border-left-color: #17a2b8;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .notification-message {
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .notification-close {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .notification-close:hover {
+            color: #666;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        .notification.removing {
+            animation: slideOut 0.3s ease-out;
+        }
+        
+        .badge-severity {
+            font-size: 0.75em;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 0.375rem;
+            margin: 0.25rem 0;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .main-content {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(111, 66, 193, 0.05);
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        
+        /* Night Mode Styles */
+        body.night-mode {
+            background-color: #1a1a1a !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .navbar {
+            background-color: #2d3748 !important;
+            border-color: #4a5568 !important;
+        }
+        
+        body.night-mode .navbar-brand {
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .navbar-nav .nav-link {
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .navbar-nav .nav-link:hover {
+            color: #6f42c1 !important;
+        }
+        
+        body.night-mode .card {
+            background-color: #2d3748 !important;
+            border-color: #4a5568 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .card-header {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .card-body {
+            background-color: #2d3748 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .table {
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .table thead th {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .table tbody td {
+            background-color: #2d3748 !important;
+            border-color: #4a5568 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .form-control {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .form-control:focus {
+            background-color: #4a5568 !important;
+            border-color: #6f42c1 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .form-select {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .btn-primary {
+            background-color: #6f42c1 !important;
+            border-color: #6f42c1 !important;
+        }
+        
+        body.night-mode .btn-outline-primary {
+            border-color: #6f42c1 !important;
+            color: #6f42c1 !important;
+        }
+        
+        body.night-mode .btn-outline-primary:hover {
+            background-color: #6f42c1 !important;
+            color: #ffffff !important;
+        }
+        
+        body.night-mode .btn-secondary {
+            background-color: #6c757d !important;
+            border-color: #6c757d !important;
+        }
+        
+        body.night-mode .btn-outline-secondary {
+            border-color: #6c757d !important;
+            color: #6c757d !important;
+        }
+        
+        body.night-mode .btn-outline-secondary:hover {
+            background-color: #6c757d !important;
+            color: #ffffff !important;
+        }
+        
+        body.night-mode .badge {
+            color: #ffffff !important;
+        }
+        
+        body.night-mode .badge.bg-secondary {
+            background-color: #6c757d !important;
+        }
+        
+        body.night-mode .ioc-value {
+            background-color: #4a5568 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .text-muted {
+            color: #a0aec0 !important;
+        }
+        
+        body.night-mode .form-text {
+            color: #a0aec0 !important;
+        }
+        
+        body.night-mode .modal-content {
+            background-color: #2d3748 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .modal-header {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .modal-body {
+            background-color: #2d3748 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .modal-footer {
+            background-color: #4a5568 !important;
+            border-color: #718096 !important;
+        }
+        
+        body.night-mode .dropdown-menu {
+            background-color: #2d3748 !important;
+            border-color: #4a5568 !important;
+        }
+        
+        body.night-mode .dropdown-item {
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .dropdown-item:hover {
+            background-color: #4a5568 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.night-mode .progress {
+            background-color: #4a5568 !important;
+        }
+        
+        body.night-mode .alert {
+            color: #ffffff !important;
+        }
+        
+        body.night-mode .alert-success {
+            background-color: #2d5a3d !important;
+            border-color: #38a169 !important;
+        }
+        
+        body.night-mode .alert-warning {
+            background-color: #744210 !important;
+            border-color: #d69e2e !important;
+        }
+        
+        body.night-mode .alert-danger {
+            background-color: #5a2d2d !important;
+            border-color: #e53e3e !important;
+        }
+        
+        body.night-mode .alert-info {
+            background-color: #2c5282 !important;
+            border-color: #3182ce !important;
+        }
+        
+        body.night-mode .notification {
+            background-color: #2d3748 !important;
+            color: #e9ecef !important;
+            border-color: #4a5568 !important;
+        }
+        
+        body.night-mode .notification.success {
+            border-left-color: #38a169 !important;
+        }
+        
+        body.night-mode .notification.warning {
+            border-left-color: #d69e2e !important;
+        }
+        
+        body.night-mode .notification.error {
+            border-left-color: #e53e3e !important;
+        }
+        
+        body.night-mode .notification.info {
+            border-left-color: #3182ce !important;
+        }
+        
+        body.night-mode .notification-message {
+            color: #e9ecef !important;
+        }
+        
+        /* Animated Stars Background */
+        .stars-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            background: transparent;
+        }
+        
+        body.night-mode .stars-container {
+            opacity: 1;
+        }
+        
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            z-index: 9999;
+            min-width: 2px;
+            min-height: 2px;
+            box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+        }
+        
+        @keyframes fall {
+            0% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh);
+                opacity: 0;
+            }
+        }
+        
+        .star.falling {
+            animation: fall linear infinite;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Animated Stars Background -->
+    <div class="stars-container" id="starsContainer"></div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-white">
+                            <i class="fas fa-shield-alt"></i> PulseLens
+                        </h4>
+                        <small class="text-white-50">IOC Analysis System</small>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('index') }}">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('ioc_list') }}">
+                                <i class="fas fa-list"></i> IOCs
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('analyze') }}">
+                                <i class="fas fa-search"></i> Analyze
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('reports') }}">
+                                <i class="fas fa-file-alt"></i> Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('ssh_management') }}">
+                                <i class="fas fa-server"></i> SSH Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('stats') }}">
+                                <i class="fas fa-chart-bar"></i> Statistics
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('settings') }}">
+                                <i class="fas fa-cog"></i> Settings
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="toggleNightMode()" title="Toggle Night Mode">
+                                <i class="fas fa-moon" id="nightModeIcon"></i> Night Mode
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <hr class="text-white-50">
+                    
+                    <div class="text-center">
+                        <small class="text-white-50">
+                            Version 1.0.0<br>
+                            <i class="fas fa-clock"></i> 
+                            <span id="current-time"></span>
+                        </small>
+                    </div>
+                </div>
+            </nav>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">{% block page_title %}Dashboard{% endblock %}</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshData()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="exportData('json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportData('csv')">CSV</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Flash messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Page content -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    
+    <!-- Loading spinner -->
+    <div class="loading-spinner position-fixed top-50 start-50 translate-middle">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+    
+    <!-- Flying Notifications Container -->
+    <div class="notification-container" id="notification-container"></div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        // Refresh data
+        function refreshData() {
+            location.reload();
+        }
+        
+        // Export data
+        function exportData(format) {
+            // Create download link for export
+            const exportUrl = `/export/${format}`;
+            const link = document.createElement('a');
+            link.href = exportUrl;
+            link.download = `pulselens_export.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // API call helper
+        function apiCall(endpoint, options = {}) {
+            const url = endpoint.startsWith('/api/')
+                ? `http://127.0.0.1:4000${endpoint}`
+                : `http://127.0.0.1:4000/api${endpoint}`;
+            const defaultOptions = {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+            
+            return fetch(url, { ...defaultOptions, ...options })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    console.error('API call error:', error);
+                    throw error;
+                });
+        }
+        
+        // Flying Notifications System
+        function showNotification(message, type = 'info', title = null, duration = 5000) {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            // Sanitize message to remove sensitive info
+            const sanitizedMessage = sanitizeMessage(message);
+            
+            // Set icon based on type
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+            
+            // Set title based on type if not provided
+            const titles = {
+                success: 'Success',
+                error: 'Error',
+                warning: 'Warning',
+                info: 'Info'
+            };
+            
+            notification.innerHTML = `
+                <button class="notification-close" onclick="removeNotification(this)">×</button>
+                <div class="notification-title">
+                    <i class="fas ${icons[type]}"></i>
+                    ${title || titles[type]}
+                </div>
+                <div class="notification-message">${sanitizedMessage}</div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto-remove after duration
+            setTimeout(() => {
+                removeNotification(notification.querySelector('.notification-close'));
+            }, duration);
+        }
+        
+        function removeNotification(button) {
+            const notification = button.closest('.notification');
+            if (notification && !notification.classList.contains('removing')) {
+                notification.classList.add('removing');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }
+        
+        function sanitizeMessage(message) {
+            // Remove sensitive information from messages
+            let sanitized = message;
+            
+            // Remove API keys (common patterns)
+            sanitized = sanitized.replace(/[A-Za-z0-9]{32,}/g, '[REDACTED]');
+            
+            // Remove file paths
+            sanitized = sanitized.replace(/[A-Za-z]:\\[^\\s]*/g, '[PATH]');
+            sanitized = sanitized.replace(/\/[^\\s]*\//g, '[PATH]');
+            
+            // Remove email addresses
+            sanitized = sanitized.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL]');
+            
+            // Remove IP addresses
+            sanitized = sanitized.replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, '[IP]');
+            
+            // Remove URLs
+            sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[URL]');
+            
+            // Remove potential hash values
+            sanitized = sanitized.replace(/\b[a-fA-F0-9]{32,64}\b/g, '[HASH]');
+            
+            return sanitized;
+        }
+        
+        // Show/hide loading spinner
+        function showLoading() {
+            document.querySelector('.loading-spinner').style.display = 'block';
+        }
+        
+        function hideLoading() {
+            document.querySelector('.loading-spinner').style.display = 'none';
+        }
+        
+        // Format date/time
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        // Stars animation functionality
+        function createStars() {
+            const starsContainer = document.getElementById('starsContainer');
+            if (!starsContainer) {
+                console.error('Stars container not found!');
+                return;
+            }
+            
+            starsContainer.innerHTML = '';
+            console.log('Creating stars...');
+            
+            // Create just a few visible stars for testing
+            for (let i = 0; i < 20; i++) {
+                const star = document.createElement('div');
+                star.className = 'star falling';
+                
+                // Make stars bigger and more visible
+                const size = Math.random() * 6 + 4;
+                star.style.width = size + 'px';
+                star.style.height = size + 'px';
+                
+                // Position across the top
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = '-20px';
+                
+                // Animation duration
+                const duration = Math.random() * 3 + 2;
+                star.style.animationDuration = duration + 's';
+                
+                // Random delay
+                const delay = Math.random() * 5;
+                star.style.animationDelay = delay + 's';
+                
+                // Make sure it's visible
+                star.style.backgroundColor = '#ffffff';
+                star.style.opacity = '1';
+                star.style.position = 'absolute';
+                
+                starsContainer.appendChild(star);
+            }
+            
+            console.log('Created', starsContainer.children.length, 'stars');
+        }
+        
+        // Night mode functionality (global)
+        function toggleNightMode() {
+            const isNightMode = !document.body.classList.contains('night-mode');
+            const nightModeIcon = document.getElementById('nightModeIcon');
+            
+            if (isNightMode) {
+                document.body.classList.add('night-mode');
+                localStorage.setItem('nightMode', 'true');
+                nightModeIcon.classList.remove('fa-moon');
+                nightModeIcon.classList.add('fa-sun');
+                createStars();
+            } else {
+                document.body.classList.remove('night-mode');
+                localStorage.setItem('nightMode', 'false');
+                nightModeIcon.classList.remove('fa-sun');
+                nightModeIcon.classList.add('fa-moon');
+            }
+        }
+        
+        // Load night mode preference on page load
+        function loadNightModePreference() {
+            const nightMode = localStorage.getItem('nightMode') === 'true';
+            const nightModeIcon = document.getElementById('nightModeIcon');
+            
+            if (nightMode) {
+                document.body.classList.add('night-mode');
+                nightModeIcon.classList.remove('fa-moon');
+                nightModeIcon.classList.add('fa-sun');
+                createStars();
+            }
+        }
+        
+        // Initialize night mode on page load
+        document.addEventListener('DOMContentLoaded', loadNightModePreference);
+        
+        // Format IOC value
+        function formatIOC(value, maxLength = 50) {
+            if (value.length > maxLength) {
+                return value.substring(0, maxLength) + '...';
+            }
+            return value;
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+
+{% block title %}Actions - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}IOC Actions{% endblock %}
+
+{% block content %}
+<!-- Action Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="m-0 font-weight-bold">IOC Action Management</h6>
+                        <p class="text-muted mb-0">Execute containment actions and manage IOC responses</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goBack()">
+                            <i class="fas fa-arrow-left"></i> Back to Reports
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Interface -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Action Execution</h6>
+            </div>
+            <div class="card-body">
+                <div id="actionInterface">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading action interface...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SSH Management Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">SSH Endpoint Management</h6>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-0">Configure SSH endpoints for real IOC containment actions</p>
+                        <small class="text-muted">Manage target systems where containment actions will be executed</small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="/ssh" class="btn btn-outline-primary">
+                            <i class="fas fa-server"></i> Manage SSH Endpoints
+                        </a>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="border rounded p-3">
+                                <i class="fas fa-ban fa-2x text-danger mb-2"></i>
+                                <h6>Block IPs</h6>
+                                <small class="text-muted">iptables rules</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3">
+                                <i class="fas fa-shield-alt fa-2x text-warning mb-2"></i>
+                                <h6>Block Domains</h6>
+                                <small class="text-muted">hosts file entries</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3">
+                                <i class="fas fa-file-archive fa-2x text-info mb-2"></i>
+                                <h6>Quarantine Files</h6>
+                                <small class="text-muted">move to /quarantine</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3">
+                                <i class="fas fa-network-wired fa-2x text-success mb-2"></i>
+                                <h6>Isolate Endpoints</h6>
+                                <small class="text-muted">disable networking</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action History -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Action History</h6>
+            </div>
+            <div class="card-body">
+                <div id="actionHistory">
+                    <div class="text-center text-muted">
+                        <p>No action history available</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentAnalysisId = null;
+let currentIOCs = [];
+
+function goBack() {
+    window.history.back();
+}
+
+function loadActions(analysisId) {
+    currentAnalysisId = analysisId;
+    
+    // Load analysis data
+    fetch(`/api/analysis/${analysisId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentIOCs = data.analysis.detailed_iocs || [];
+                renderActionInterface();
+                loadActionHistory();
+            } else {
+                showError('Failed to load analysis data');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading analysis:', error);
+            showError('Error loading analysis data');
+        });
+}
+
+function renderActionInterface() {
+    const interface = document.getElementById('actionInterface');
+    
+    if (!currentIOCs || currentIOCs.length === 0) {
+        interface.innerHTML = `
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> No IOCs found in this analysis
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Analysis IOCs</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>IOC</th>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    currentIOCs.forEach(ioc => {
+        const severity = ioc.severity || {};
+        const severityLevel = severity.level || 'unknown';
+        const severityScore = severity.score || 0;
+        
+        html += `
+            <tr>
+                <td>
+                    <code>${ioc.ioc_value}</code>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${ioc.ioc_type}</span>
+                </td>
+                <td>
+                    <span class="badge severity-${severityLevel}">${severityLevel}</span>
+                    <small class="text-muted">(${severityScore})</small>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                onclick="getRecommendation('${ioc.ioc_value}')" title="Get Recommendation">
+                            <i class="fas fa-lightbulb"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" 
+                                onclick="executeAction('${ioc.ioc_value}', 'contain')" title="Execute Action">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" 
+                                onclick="addToWatchlist('${ioc.ioc_value}')" title="Watchlist">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>Action Panel</h6>
+                <div id="actionPanel">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Select an IOC to view available actions
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    interface.innerHTML = html;
+}
+
+function getRecommendation(iocValue) {
+    fetch(`/api/iocs/${encodeURIComponent(iocValue)}/actions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            action: 'get_recommendation'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showRecommendation(data);
+        } else {
+            showError('Failed to get recommendation: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error getting recommendation:', error);
+        showError('Error getting recommendation');
+    });
+}
+
+function executeAction(iocValue, actionType) {
+    fetch(`/api/iocs/${encodeURIComponent(iocValue)}/actions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            action: 'execute_action',
+            executed_action: actionType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showActionResult(data);
+            loadActionHistory();
+        } else {
+            showError('Failed to execute action: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error executing action:', error);
+        showError('Error executing action');
+    });
+}
+
+function addToWatchlist(iocValue) {
+    fetch(`/api/iocs/${encodeURIComponent(iocValue)}/actions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            action: 'add_to_watchlist'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showActionResult(data);
+            loadActionHistory();
+        } else {
+            showError('Failed to add to watchlist: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error adding to watchlist:', error);
+        showError('Error adding to watchlist');
+    });
+}
+
+function showRecommendation(data) {
+    const panel = document.getElementById('actionPanel');
+    const rec = data.recommendation;
+    
+    let html = `
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0">ML Recommendation</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Recommended Action:</strong></p>
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb"></i> ${rec.recommended_action}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Confidence:</strong></p>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: ${rec.confidence * 100}%">
+                                ${Math.round(rec.confidence * 100)}%
+                            </div>
+                        </div>
+                        <small class="text-muted">Method: ${rec.method}</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <p><strong>Reasoning:</strong></p>
+                    <p class="text-muted">${rec.reasoning}</p>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-success" 
+                            onclick="executeAction('${data.ioc_value}', '${rec.recommended_action}')">
+                        <i class="fas fa-play"></i> Execute Recommendation
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" 
+                            onclick="addToWatchlist('${data.ioc_value}')">
+                        <i class="fas fa-eye"></i> Add to Watchlist
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    panel.innerHTML = html;
+}
+
+function showActionResult(data) {
+    const panel = document.getElementById('actionPanel');
+    
+    let html = `
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> ${data.message}
+        </div>
+    `;
+    
+    if (data.containment_action) {
+        html += `
+            <div class="card mt-2">
+                <div class="card-header">
+                    <h6 class="m-0">Containment Details</h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Status:</strong> ${data.containment_action.status}</p>
+                    <p><strong>Action:</strong> ${data.containment_action.action_type}</p>
+                    <p><strong>Timestamp:</strong> ${data.containment_action.timestamp}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    panel.innerHTML = html;
+}
+
+function loadActionHistory() {
+    // Load action history for all IOCs in the analysis
+    const historyDiv = document.getElementById('actionHistory');
+    let historyHtml = '';
+    
+    if (currentIOCs.length === 0) {
+        historyDiv.innerHTML = '<div class="text-center text-muted"><p>No IOCs to load history for</p></div>';
+        return;
+    }
+    
+    // Load history for each IOC
+    let promises = currentIOCs.map(ioc => {
+        return fetch(`/api/iocs/${encodeURIComponent(ioc.ioc_value)}/actions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'get_containment_status'
+            })
+        })
+        .then(response => response.json())
+        .then(data => ({
+            ioc: ioc.ioc_value,
+            data: data
+        }));
+    });
+    
+    Promise.all(promises)
+        .then(results => {
+            let hasHistory = false;
+            
+            results.forEach(result => {
+                if (result.data.success && result.data.containment_history) {
+                    hasHistory = true;
+                    result.data.containment_history.forEach(action => {
+                        historyHtml += `
+                            <div class="card mb-2">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3">
+                                            <code>${result.ioc}</code>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <span class="badge bg-primary">${action.action_type}</span>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <span class="badge bg-${action.status === 'completed' ? 'success' : 'warning'}">${action.status}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small class="text-muted">${action.timestamp}</small>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <small class="text-muted">${action.method || 'N/A'}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+            
+            if (!hasHistory) {
+                historyDiv.innerHTML = '<div class="text-center text-muted"><p>No action history available</p></div>';
+            } else {
+                historyDiv.innerHTML = historyHtml;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading action history:', error);
+            historyDiv.innerHTML = '<div class="alert alert-danger">Error loading action history</div>';
+        });
+}
+
+function showError(message) {
+    const panel = document.getElementById('actionPanel');
+    panel.innerHTML = `
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> ${message}
+        </div>
+    `;
+}
+
+// Load actions when page loads with analysis ID from URL
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const analysisId = urlParams.get('analysis_id');
+    
+    if (analysisId) {
+        loadActions(analysisId);
+    } else {
+        document.getElementById('actionInterface').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> No analysis ID provided
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}

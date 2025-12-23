@@ -1,0 +1,844 @@
+{% extends "base.html" %}
+
+{% block title %}IOC Details - {{ ioc.ioc_value }}{% endblock %}
+
+{% block page_title %}IOC Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- IOC Information -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold">IOC Information</h6>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportIOC()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="reanalyzeIOC()">
+                        <i class="fas fa-sync"></i> Re-analyze
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td><strong>IOC Value:</strong></td>
+                                <td><code class="ioc-value">{{ ioc.ioc_value }}</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Type:</strong></td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ ioc.ioc_type.upper() }}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Original Value:</strong></td>
+                                <td>
+                                    {% if ioc.original_value and ioc.original_value != ioc.ioc_value %}
+                                        <code class="ioc-value">{{ ioc.original_value }}</code>
+                                    {% else %}
+                                        <span class="text-muted">Same as normalized</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Feed Source:</strong></td>
+                                <td>{{ ioc.feed_source or 'Unknown' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td><strong>First Seen:</strong></td>
+                                <td>{{ formatDateTime(ioc.first_seen) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Last Seen:</strong></td>
+                                <td>{{ formatDateTime(ioc.last_seen) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Created:</strong></td>
+                                <td>{{ formatDateTime(ioc.created_at) }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Updated:</strong></td>
+                                <td>{{ formatDateTime(ioc.updated_at) }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Classification Results -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Classification Results</h6>
+            </div>
+            <div class="card-body">
+                {% if ioc.severity %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Severity Assessment</h6>
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="badge severity-{{ ioc.severity.level }} me-3" style="font-size: 1.2em;">
+                                    {{ ioc.severity.level.upper() }}
+                                </span>
+                                <div>
+                                    <h5 class="mb-0">{{ (ioc.severity.score / 10)|round(1) }}/10</h5>
+                                    <small class="text-muted">Severity Score</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Score Breakdown -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small>Risk Level</small>
+                                    <small>{{ (ioc.severity.score / 10)|round(1) }}/10</small>
+                                </div>
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar severity-{{ ioc.severity.level }}" id="severity-progress-bar" style="width: 0%;"></div>
+                                </div>
+                                <script>
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        const progressBar = document.getElementById('severity-progress-bar');
+                                        if (progressBar) {
+                                            progressBar.style.width = '{{ (ioc.severity.score)|round(0) }}%';
+                                        }
+                                    });
+                                </script>
+                            </div>
+                            
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Confidence:</strong></td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if ioc.severity.confidence == 'high' else 'warning' if ioc.severity.confidence == 'medium' else 'info' }}">
+                                            {{ ioc.severity.confidence.upper() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Classification Date:</strong></td>
+                                    <td>{{ formatDateTime(ioc.severity.classified_at) if ioc.severity.classified_at else 'Unknown' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>Recommended Actions</h6>
+                            {% if ioc.severity.recommended_actions %}
+                                <ul class="list-unstyled">
+                                    {% for action in ioc.severity.recommended_actions %}
+                                        <li class="mb-2">
+                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                            {{ action }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">No specific actions recommended</p>
+                            {% endif %}
+                            
+                            {% if ioc.severity.classification_factors %}
+                                <h6 class="mt-3">Classification Factors</h6>
+                                {% for category, factors in ioc.severity.classification_factors.items() %}
+                                    <div class="mb-2">
+                                        <strong>{{ category.replace('_', ' ').title() }}:</strong>
+                                        {% if factors is iterable and factors is not string %}
+                                            {{ factors | join(', ') }}
+                                        {% else %}
+                                            {{ factors }}
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No classification data available for this IOC
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Enrichment Data -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Threat Intelligence Enrichment</h6>
+            </div>
+            <div class="card-body">
+                {% if ioc.enrichment %}
+                    {% if ioc.enrichment.sources %}
+                        <div class="mb-3">
+                            <strong>Data Sources:</strong>
+                            {% for source in ioc.enrichment.sources %}
+                                <span class="badge bg-primary me-1">{{ source }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if ioc.enrichment.threat_intel %}
+                        {% for source, data in ioc.enrichment.threat_intel.items() %}
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">{{ source.upper() }} Data</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% if source == 'otx' %}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <table class="table table-sm">
+                                                    <tr>
+                                                        <td><strong>Pulse Count:</strong></td>
+                                                        <td>{{ data.pulse_count or 0 }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><strong>Threat Score:</strong></td>
+                                                        <td>{{ data.threat_score or 'N/A' }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><strong>Reputation:</strong></td>
+                                                        <td>
+                                                            {% if data.reputation %}
+                                                                <span class="badge severity-{{ data.reputation.reputation or 'info' }}">
+                                                                    {{ (data.reputation.reputation or 'unknown').title() }}
+                                                                </span>
+                                                            {% else %}
+                                                                <span class="text-muted">Unknown</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                            <div class="col-md-6">
+                                                {% if data.references %}
+                                                    <strong>References:</strong>
+                                                    <ul class="list-unstyled">
+                                                        {% for ref in data.references[:5] %}
+                                                            <li><a href="{{ ref }}" target="_blank" class="small">{{ ref }}</a></li>
+                                                        {% endfor %}
+                                                        {% if data.references|length > 5 %}
+                                                            <li class="small text-muted">... and {{ data.references|length - 5 }} more</li>
+                                                        {% endif %}
+                                                    </ul>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <pre class="bg-light p-2 rounded"><code>{{ data | tojson(indent=2) }}</code></pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No threat intelligence data available</p>
+                    {% endif %}
+                    
+                    {% if ioc.enrichment.risk_assessment %}
+                        <div class="mt-3">
+                            <h6>Risk Assessment</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5 class="text-{{ 'danger' if ioc.enrichment.risk_assessment.get('overall_risk') == 'high' else 'warning' if ioc.enrichment.risk_assessment.get('overall_risk') == 'medium' else 'success' }}">
+                                            {{ (ioc.enrichment.risk_assessment.get('overall_risk') or 'unknown').upper() }}
+                                        </h5>
+                                        <small>Overall Risk</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5>{{ ioc.enrichment.risk_assessment.get('confidence_score') or 'N/A' }}</h5>
+                                        <small>Confidence Score</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h5>{{ ioc.enrichment.risk_assessment.get('data_freshness') or 'N/A' }}</h5>
+                                        <small>Data Freshness</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        No enrichment data available for this IOC
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metadata and Tags -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Metadata and Tags</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Tags</h6>
+                        {% if ioc.tags %}
+                            <div>
+                                {% for tag in ioc.tags %}
+                                    <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">No tags assigned</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Additional Metadata</h6>
+                        {% if ioc.metadata %}
+                            <table class="table table-sm">
+                                {% for key, value in ioc.metadata.items() %}
+                                    <tr>
+                                        <td><strong>{{ key }}:</strong></td>
+                                        <td>{{ value }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                        {% else %}
+                            <p class="text-muted">No additional metadata</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- AI-Powered Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">AI-Powered Actions & SOAR Containment</h6>
+            </div>
+            <div class="card-body">
+                <!-- ML Recommendation -->
+                <div id="ml-recommendation" class="alert alert-info mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" id="recommendation-loading"></div>
+                        <div>
+                            <strong>AI Recommendation:</strong> 
+                            <span id="recommendation-text">Loading...</span>
+                            <div class="mt-1">
+                                <small class="text-muted" id="recommendation-confidence"></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Containment Status -->
+                <div id="containment-status" class="alert alert-warning mb-3" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" id="containment-loading"></div>
+                        <div>
+                            <strong>SOAR Containment:</strong> 
+                            <span id="containment-text">Processing...</span>
+                            <div class="mt-1">
+                                <small class="text-muted" id="containment-details"></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success" onclick="executeRecommendedAction()" id="execute-btn">
+                        <i class="fas fa-play"></i> Execute Recommended Action
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="initiateContainment()" id="containment-btn">
+                        <i class="fas fa-shield-alt"></i> Initiate SOAR Containment
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="reanalyzeIOC()">
+                        <i class="fas fa-sync"></i> Re-analyze IOC
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="exportIOC()">
+                        <i class="fas fa-download"></i> Export IOC
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="addToWatchlist()">
+                        <i class="fas fa-eye"></i> Add to Watchlist
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" onclick="markAsFalsePositive()">
+                        <i class="fas fa-times"></i> Mark as False Positive
+                    </button>
+                </div>
+                
+                <!-- Alternative Actions -->
+                <div class="mt-3">
+                    <h6>Alternative Actions:</h6>
+                    <div class="btn-group" role="group" id="alternative-actions">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeAction('Quarantine')">Quarantine</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeAction('Block')">Block</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeAction('Monitor')">Monitor</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeAction('Log')">Log</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeAction('Ignore')">Ignore</button>
+                    </div>
+                </div>
+                
+                <!-- Containment History -->
+                <div class="mt-3" id="containment-history" style="display: none;">
+                    <h6>Containment History:</h6>
+                    <div id="containment-history-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related IOCs -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Related IOCs</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <i class="fas fa-link fa-2x text-muted mb-3"></i>
+                    <p class="text-muted">Related IOC correlation will be available in future versions</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis History -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold">Analysis History</h6>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-primary"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Created</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.created_at) }}</small>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-info"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Last Updated</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.updated_at) }}</small>
+                        </div>
+                    </div>
+                    {% if ioc.severity and ioc.severity.classified_at %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-warning"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Classified</h6>
+                            <small class="text-muted">{{ formatDateTime(ioc.severity.classified_at) }}</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 10px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -24px;
+        top: 0;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+    }
+    
+    .timeline-content {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variable to store ML recommendation
+    let mlRecommendation = null;
+
+    // Load ML recommendation on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMLRecommendation();
+    });
+    
+    // Load ML recommendation
+    function loadMLRecommendation() {
+        const loadingEl = document.getElementById('recommendation-loading');
+        const textEl = document.getElementById('recommendation-text');
+        const confidenceEl = document.getElementById('recommendation-confidence');
+        
+        // Show loading
+        loadingEl.style.display = 'inline-block';
+        textEl.textContent = 'Analyzing IOC...';
+        confidenceEl.textContent = '';
+        
+        apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'get_recommendation' })
+        })
+        .then(data => {
+            if (data.success) {
+                mlRecommendation = data.recommendation;
+                
+                // Update recommendation display
+                textEl.textContent = data.recommendation.recommended_action.toUpperCase();
+                confidenceEl.textContent = `Confidence: ${(data.recommendation.confidence * 100).toFixed(1)}% | Method: ${data.recommendation.method}`;
+                
+                // Update execute button
+                const executeBtn = document.getElementById('execute-btn');
+                executeBtn.innerHTML = `<i class="fas fa-play"></i> Execute: ${data.recommendation.recommended_action.toUpperCase()}`;
+                
+                // Update recommendation alert color based on severity
+                const alertEl = document.getElementById('ml-recommendation');
+                alertEl.className = `alert mb-3 ${getSeverityAlertClass(data.recommendation.severity)}`;
+                
+                // Hide loading
+                loadingEl.style.display = 'none';
+                
+                // Show reasoning
+                confidenceEl.innerHTML += `<br><small>${data.recommendation.reasoning}</small>`;
+            } else {
+                throw new Error(data.error || 'Failed to get recommendation');
+            }
+        })
+        .catch(error => {
+            loadingEl.style.display = 'none';
+            textEl.textContent = 'Recommendation unavailable';
+            confidenceEl.textContent = error.message;
+        });
+    }
+    
+    // Get severity alert class
+    function getSeverityAlertClass(severity) {
+        switch(severity) {
+            case 'critical': return 'alert-danger';
+            case 'high': return 'alert-warning';
+            case 'medium': return 'alert-info';
+            case 'low': return 'alert-secondary';
+            case 'info': return 'alert-light';
+            default: return 'alert-info';
+        }
+    }
+    
+    // Execute recommended action
+    function executeRecommendedAction() {
+        if (!mlRecommendation) {
+            showNotification('ML recommendation not loaded yet. Please wait...', 'warning');
+            return;
+        }
+        
+        if (confirm(`Execute recommended action: ${mlRecommendation.recommended_action.toUpperCase()}?\\n\\nReasoning: ${mlRecommendation.reasoning}`)) {
+            executeAction(mlRecommendation.recommended_action);
+        }
+    }
+    
+    // Execute specific action
+    function executeAction(action) {
+        showLoading();
+        
+        apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'execute_action',
+                executed_action: action,
+                outcome: 'executed'
+            })
+        })
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification(`Action "${data.executed_action}" executed successfully!`, 'success');
+                // Refresh recommendation after action
+                setTimeout(loadMLRecommendation, 1000);
+            } else {
+                showNotification('Action execution failed: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showNotification('Action execution error: ' + error.message, 'error');
+        });
+    }
+    
+    // Export IOC data
+    function exportIOC() {
+        const iocData = JSON.parse('{{ ioc | tojson | safe }}');
+        const exportData = {
+            ioc: iocData,
+            ml_recommendation: mlRecommendation,
+            exported_at: new Date().toISOString()
+        };
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `ioc_${iocData.ioc_value.replace(/[^a-zA-Z0-9]/g, '_')}_with_ml_recommendation.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+    
+    // Re-analyze IOC
+    function reanalyzeIOC() {
+        if (confirm('Re-analyze this IOC? This will update its threat intelligence and classification.')) {
+            showLoading();
+            
+            apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/reanalyze`, {
+                method: 'POST'
+            })
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification('IOC re-analysis started. Refresh the page to see updated results.', 'info');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showNotification('Re-analysis failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Re-analysis error: ' + error.message, 'error');
+            });
+        }
+    }
+    
+    // Add to watchlist
+    function addToWatchlist() {
+        apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'add_to_watchlist' })
+        })
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                // Update recommendation if ML suggests watchlist
+                if (mlRecommendation && mlRecommendation.recommended_action === 'watchlist') {
+                    setTimeout(loadMLRecommendation, 500);
+                }
+            } else {
+                showNotification('Failed to add to watchlist: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Watchlist error: ' + error.message, 'error');
+        });
+    }
+    
+    // Mark as false positive
+    function markAsFalsePositive() {
+        if (confirm('Mark this IOC as a false positive? This will affect future classifications.')) {
+            apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'mark_false_positive' })
+            })
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    // Update recommendation if ML suggests ignore
+                    if (mlRecommendation && mlRecommendation.recommended_action === 'ignore') {
+                        setTimeout(loadMLRecommendation, 500);
+                    }
+                } else {
+                    showNotification('Failed to mark as false positive: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Failed to refresh statistics', 'error');
+            });
+        }
+    }
+    
+    // Initiate SOAR containment workflow
+    function initiateContainment() {
+        const iocValue = '{{ ioc.ioc_value }}';
+        const iocType = '{{ ioc.ioc_type }}';
+        
+        // Show confirmation dialog
+        const userResponse = confirm(`Proceed with containment for ${iocValue} (${iocType})?\\n\\nThis will:\\n• Add to Chronicle SIEM blocklists\\n• Execute EDR actions if applicable\\n• Document in SOAR case`);
+        
+        if (userResponse) {
+            executeContainment('Yes');
+        } else {
+            executeContainment('No');
+        }
+    }
+    
+    // Execute containment workflow
+    function executeContainment(userResponse) {
+        const containmentEl = document.getElementById('containment-status');
+        const loadingEl = document.getElementById('containment-loading');
+        const textEl = document.getElementById('containment-text');
+        const detailsEl = document.getElementById('containment-details');
+        
+        // Show containment status
+        containmentEl.style.display = 'block';
+        loadingEl.style.display = 'inline-block';
+        textEl.textContent = 'Processing containment...';
+        detailsEl.textContent = '';
+        
+        showLoading();
+        
+        apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'confirm_containment',
+                user_response: userResponse
+            })
+        })
+        .then(data => {
+            hideLoading();
+            loadingEl.style.display = 'none';
+            
+            if (data.success) {
+                const action = data.containment_action;
+                
+                // Update containment display
+                textEl.textContent = `Status: ${action.status.toUpperCase()}`;
+                detailsEl.innerHTML = formatContainmentDetails(action);
+                
+                // Update alert color based on status
+                containmentEl.className = `alert mb-3 ${getContainmentAlertClass(action.status)}`;
+                
+                // Show containment history
+                loadContainmentHistory();
+                
+                // Show success message
+                showNotification(`Containment ${action.status}: ${data.message}`, action.status === 'completed' ? 'success' : 'warning');
+                
+            } else {
+                throw new Error(data.error || 'Containment failed');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            loadingEl.style.display = 'none';
+            textEl.textContent = 'Containment Failed';
+            detailsEl.textContent = error.message;
+            containmentEl.className = 'alert mb-3 alert-danger';
+        });
+    }
+    
+    // Format containment details for display
+    function formatContainmentDetails(action) {
+        // Handle both action object and result dictionary
+        const actionId = action.action_id || action.action_id || 'N/A';
+        const iocType = action.ioc_type || action.ioc_type || 'N/A';
+        const timestamp = action.timestamp || action.timestamp;
+        const status = action.status || action.status || 'unknown';
+        
+        let details = `Action ID: ${actionId}<br>`;
+        details += `IOC Type: ${iocType}<br>`;
+        
+        // Handle timestamp formatting
+        let formattedTime = 'Invalid Date';
+        if (timestamp) {
+            try {
+                const date = new Date(timestamp);
+                if (!isNaN(date.getTime())) {
+                    formattedTime = date.toLocaleString();
+                }
+            } catch (e) {
+                console.error('Timestamp formatting error:', e);
+            }
+        }
+        details += `Timestamp: ${formattedTime}<br>`;
+        
+        if (status === 'completed' && action.details && action.details.containment_results) {
+            details += '<br><strong>Containment Actions:</strong><br>';
+            action.details.containment_results.forEach(result => {
+                details += `• ${result.platform}: ${result.action} - ${result.status}<br>`;
+            });
+        } else if (status === 'failed') {
+            details += `<br><strong>Error:</strong> ${action.details?.error || action.message || 'Unknown error'}`;
+        } else if (status === 'already_contained') {
+            details += `<br><strong>Message:</strong> IOC is already contained`;
+        }
+        
+        return details;
+    }
+    
+    // Get containment alert class
+    function getContainmentAlertClass(status) {
+        switch(status) {
+            case 'completed': return 'alert-success';
+            case 'in_progress': return 'alert-info';
+            case 'failed': return 'alert-danger';
+            case 'aborted': return 'alert-warning';
+            case 'already_contained': return 'alert-warning';
+            default: return 'alert-secondary';
+        }
+    }
+    
+    // Load containment history
+    function loadContainmentHistory() {
+        apiCall(`/api/iocs/${encodeURIComponent('{{ ioc.ioc_value }}')}/actions`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'get_containment_status' })
+        })
+        .then(data => {
+            if (data.success && data.containment_history.length > 0) {
+                const historyEl = document.getElementById('containment-history');
+                const listEl = document.getElementById('containment-history-list');
+                
+                // Display history
+                listEl.innerHTML = '';
+                data.containment_history.forEach(action => {
+                    const item = document.createElement('div');
+                    item.className = 'border-bottom pb-2 mb-2';
+                    item.innerHTML = `
+                        <div class="d-flex justify-content-between">
+                            <strong>${action.action_id}</strong>
+                            <span class="badge ${getContainmentAlertClass(action.status)}">${action.status}</span>
+                        </div>
+                        <small class="text-muted">${new Date(action.timestamp).toLocaleString()}</small>
+                        <div class="mt-1">
+                            <small>${action.details.action_type || 'Unknown action'}</small>
+                        </div>
+                    `;
+                    listEl.appendChild(item);
+                });
+                
+                historyEl.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load containment history:', error);
+        });
+    }
+</script>
+{% endblock %}

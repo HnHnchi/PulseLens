@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}IOCs - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}Indicators of Compromise{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search IOCs</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ current_search }}" placeholder="Search IOC values...">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="type" class="form-label">Type</label>
+                        <select class="form-select" id="type" name="type">
+                            <option value="">All Types</option>
+                            <option value="ip" {% if current_type == 'ip' %}selected{% endif %}>IP Address</option>
+                            <option value="domain" {% if current_type == 'domain' %}selected{% endif %}>Domain</option>
+                            <option value="url" {% if current_type == 'url' %}selected{% endif %}>URL</option>
+                            <option value="hash" {% if current_type == 'hash' %}selected{% endif %}>Hash</option>
+                            <option value="email" {% if current_type == 'email' %}selected{% endif %}>Email</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="severity" class="form-label">Severity</label>
+                        <select class="form-select" id="severity" name="severity">
+                            <option value="">All Severities</option>
+                            <option value="critical" {% if current_severity == 'critical' %}selected{% endif %}>Critical</option>
+                            <option value="high" {% if current_severity == 'high' %}selected{% endif %}>High</option>
+                            <option value="medium" {% if current_severity == 'medium' %}selected{% endif %}>Medium</option>
+                            <option value="low" {% if current_severity == 'low' %}selected{% endif %}>Low</option>
+                            <option value="info" {% if current_severity == 'info' %}selected{% endif %}>Info</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="per_page" class="form-label">Per Page</label>
+                        <select class="form-select" id="per_page" name="per_page">
+                            <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="btn-group w-100">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Filter
+                            </button>
+                            <a href="{{ url_for('ioc_list') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Clear
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- IOC Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold">
+            IOC List 
+            {% if total_count > 0 %}
+                <span class="badge bg-secondary">{{ total_count }} total</span>
+            {% endif %}
+        </h6>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportCurrentView()">
+                <i class="fas fa-download"></i> Export
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshTable()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if iocs %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th>IOC Value</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>Score</th>
+                            <th>Tags</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ioc in iocs %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="ioc-checkbox" value="{{ ioc.ioc_value }}">
+                            </td>
+                            <td>
+                                <span class="ioc-value" title="{{ ioc.ioc_value }}">
+                                    {{ formatIOC(ioc.ioc_value, 50) }}
+                                </span>
+                                {% if ioc.original_value and ioc.original_value != ioc.ioc_value %}
+                                    <br><small class="text-muted">Original: {{ formatIOC(ioc.original_value, 40) }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ ioc.ioc_type.upper() }}</span>
+                            </td>
+                            <td>
+                                {% set severity_level = ioc.severity.level if ioc.severity else 'info' %}
+                                <span class="badge severity-{{ severity_level }} badge-severity">
+                                    {{ severity_level.upper() }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if ioc.severity and ioc.severity.score %}
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ (ioc.severity.score / 10)|round(1) }}/10</span>
+                                        <div class="progress" style="width: 50px; height: 8px;">
+                                            <div class="progress-bar severity-{{ severity_level }}" 
+                                                 style="width: {{ (ioc.severity.score)|round(0) }}%"></div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ioc.tags %}
+                                    {% for tag in ioc.tags[:3] %}
+                                        <span class="badge bg-light text-dark me-1">{{ tag }}</span>
+                                    {% endfor %}
+                                    {% if ioc.tags|length > 3 %}
+                                        <span class="badge bg-light text-dark">+{{ ioc.tags|length - 3 }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ formatDateTime(ioc.updated_at) }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('ioc_detail', ioc_value=ioc.ioc_value) }}" 
+                                       class="btn btn-sm btn-outline-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="showIOCModal('{{ ioc.ioc_value }}')" title="Quick View">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <nav aria-label="IOC pagination">
+                <ul class="pagination justify-content-center">
+                    {% if has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('ioc_list', page=page-1, per_page=per_page, type=current_type, severity=current_severity, search=current_search) }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ p }}</span>
+                            </li>
+                        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('ioc_list', page=p, per_page=per_page, type=current_type, severity=current_severity, search=current_search) }}">
+                                    {{ p }}
+                                </a>
+                            </li>
+                        {% elif p == 4 or p == total_pages - 3 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('ioc_list', page=page+1, per_page=per_page, type=current_type, severity=current_severity, search=current_search) }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            
+            <!-- Bulk Actions -->
+            <div class="mt-3">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkAction('delete')">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkAction('export')">
+                                <i class="fas fa-download"></i> Export Selected
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkAction('reanalyze')">
+                                <i class="fas fa-sync"></i> Re-analyze Selected
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">
+                            Showing {{ ((page - 1) * per_page) + 1 }} to 
+                            {{ min(page * per_page, total_count) }} of {{ total_count }} IOCs
+                        </small>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No IOCs Found</h5>
+                <p class="text-muted">
+                    {% if current_search or current_type or current_severity %}
+                        Try adjusting your filters or 
+                        <a href="{{ url_for('ioc_list') }}">clear all filters</a>.
+                    {% else %}
+                        No IOCs have been analyzed yet. 
+                        <a href="{{ url_for('analyze') }}">Start your first analysis</a> to see results here.
+                    {% endif %}
+                </p>
+                <div class="mt-3">
+                    <a href="{{ url_for('analyze') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Analyze IOCs
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- IOC Quick View Modal -->
+<div class="modal fade" id="iocModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">IOC Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="iocModalContent">
+                    <!-- Content will be loaded via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="viewFullDetails">View Full Details</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle select all checkboxes
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.ioc-checkbox');
+        checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
+    }
+    
+    // Show IOC modal
+    function showIOCModal(iocValue) {
+        const modal = new bootstrap.Modal(document.getElementById('iocModal'));
+        const content = document.getElementById('iocModalContent');
+        
+        content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+        
+        apiCall(`/api/iocs?search=${encodeURIComponent(iocValue)}`)
+            .then(data => {
+                if (data.iocs && data.iocs.length > 0) {
+                    const ioc = data.iocs[0];
+                    content.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>IOC Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Value:</strong></td><td><code>${ioc.ioc_value}</code></td></tr>
+                                    <tr><td><strong>Type:</strong></td><td>${ioc.ioc_type.toUpperCase()}</td></tr>
+                                    <tr><td><strong>Original:</strong></td><td><code>${ioc.original_value || '-'}</code></td></tr>
+                                    <tr><td><strong>Feed Source:</strong></td><td>${ioc.feed_source || '-'}</td></tr>
+                                    <tr><td><strong>First Seen:</strong></td><td>${formatDateTime(ioc.first_seen)}</td></tr>
+                                    <tr><td><strong>Last Seen:</strong></td><td>${formatDateTime(ioc.last_seen)}</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Classification</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Severity:</strong></td><td><span class="badge severity-${ioc.severity?.level || 'info'}">${(ioc.severity?.level || 'info').toUpperCase()}</span></td></tr>
+                                    <tr><td><strong>Score:</strong></td><td>${ioc.severity?.score ? ((ioc.severity.score / 10).toFixed(1) + '/10') : '-'}</td></tr>
+                                    <tr><td><strong>Confidence:</strong></td><td>${ioc.confidence || '-'}</td></tr>
+                                </table>
+                                
+                                <h6 class="mt-3">Tags</h6>
+                                <div>
+                                    ${ioc.tags && ioc.tags.length > 0 ? 
+                                        ioc.tags.map(tag => `<span class="badge bg-light text-dark me-1">${tag}</span>`).join('') : 
+                                        '<span class="text-muted">No tags</span>'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('viewFullDetails').onclick = function() {
+                        window.location.href = `/ioc/${iocValue}`;
+                    };
+                } else {
+                    content.innerHTML = '<div class="alert alert-warning">IOC not found</div>';
+                }
+            })
+            .catch(error => {
+                content.innerHTML = '<div class="alert alert-danger">Error loading IOC details</div>';
+            });
+        
+        modal.show();
+    }
+    
+    // Bulk actions
+    function bulkAction(action) {
+        const selected = Array.from(document.querySelectorAll('.ioc-checkbox:checked'))
+            .map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            alert('Please select at least one IOC');
+            return;
+        }
+        
+        if (action === 'delete' && !confirm(`Are you sure you want to delete ${selected.length} IOCs?`)) {
+            return;
+        }
+        
+        console.log(`Bulk ${action} on:`, selected);
+        // Implement bulk actions here
+    }
+    
+    // Export current view
+    function exportCurrentView() {
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', 'json');
+        window.open(`${window.location.pathname}?${params.toString()}`);
+    }
+    
+    // Refresh table
+    function refreshTable() {
+        location.reload();
+    }
+</script>
+{% endblock %}

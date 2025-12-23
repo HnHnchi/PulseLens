@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - PulseLens Dashboard{% endblock %}
+
+{% block page_title %}Analysis Reports{% endblock %}
+
+{% block content %}
+<!-- Reports Filter -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="dateRange" class="form-label">Date Range</label>
+                        <select class="form-select" id="dateRange" onchange="filterReports()">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">Last 7 Days</option>
+                            <option value="month">Last 30 Days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="reportType" class="form-label">Report Type</label>
+                        <select class="form-select" id="reportType" onchange="filterReports()">
+                            <option value="all">All Types</option>
+                            <option value="json">JSON</option>
+                            <option value="html">HTML</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="sortBy" class="form-label">Sort By</label>
+                        <select class="form-select" id="sortBy" onchange="filterReports()">
+                            <option value="date_desc">Newest First</option>
+                            <option value="date_asc">Oldest First</option>
+                            <option value="ioc_count_desc">Most IOCs</option>
+                            <option value="ioc_count_asc">Least IOCs</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reports Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold">
+            Generated Reports 
+            {% if reports %}
+                <span class="badge bg-secondary">{{ reports|length }} reports</span>
+            {% endif %}
+        </h6>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="generateNewReport()">
+                <i class="fas fa-plus"></i> New Report
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshReports()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if reports %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" id="selectAllReports" onchange="toggleSelectAllReports()">
+                            </th>
+                            <th>Analysis ID</th>
+                            <th>Generated</th>
+                            <th>IOCs Analyzed</th>
+                            <th>High Risk</th>
+                            <th>File Name</th>
+                            <th>Size</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="report-checkbox" value="{{ report.filename }}">
+                            </td>
+                            <td>
+                                <code>{{ report.analysis_id[:8] }}...</code>
+                                <br><small class="text-muted">{{ report.analysis_id }}</small>
+                            </td>
+                            <td>
+                                <small>{{ formatDateTime(report.generated_at) }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ report.total_iocs }}</span>
+                            </td>
+                            <td>
+                                {% if report.high_risk_count > 0 %}
+                                    <span class="badge severity-critical">{{ report.high_risk_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="text-monospace">{{ report.filename }}</span>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ report.file_size or 'N/A' }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                                            onclick="showActions('{{ report.analysis_id }}')" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-info" 
+                                            onclick="downloadReport('{{ report.filename }}')" title="Download">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning" 
+                                            onclick="showReportDetails('{{ report.filename }}')" title="Details">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success" 
+                                            onclick="showActions('{{ report.analysis_id }}')" title="Actions">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="deleteReport('{{ report.filename }}')" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Bulk Actions -->
+            <div class="mt-3">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkDeleteReports()">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkDownloadReports()">
+                                <i class="fas fa-download"></i> Download Selected
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">
+                            Showing {{ reports|length }} reports
+                        </small>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Reports Found</h5>
+                <p class="text-muted">
+                    No analysis reports have been generated yet. 
+                    <a href="{{ url_for('analyze') }}">Run an analysis</a> to create your first report.
+                </p>
+                <div class="mt-3">
+                    <a href="{{ url_for('analyze') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Start Analysis
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Report Details Modal -->
+<div class="modal fade" id="reportDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="reportDetailsContent">
+                    <!-- Report details will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="downloadReportBtn">Download Report</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Report Modal -->
+<div class="modal fade" id="newReportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Generate New Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newReportForm">
+                    <div class="mb-3">
+                        <label for="reportSource" class="form-label">Report Source</label>
+                        <select class="form-select" id="reportSource" name="reportSource">
+                            <option value="database">Recent Database IOCs</option>
+                            <option value="custom">Custom IOC List</option>
+                        </select>
+                    </div>
+                    
+                    <div id="customSource" style="display: none;">
+                        <div class="mb-3">
+                            <label for="customIOCs" class="form-label">IOC Data</label>
+                            <textarea class="form-control" id="customIOCs" name="customIOCs" rows="5"
+                                      placeholder="Enter IOCs one per line..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reportFormat" class="form-label">Report Format</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="jsonFormat" name="reportFormat" value="json" checked>
+                            <label class="form-check-label" for="jsonFormat">
+                                JSON Report
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="htmlFormat" name="reportFormat" value="html" checked>
+                            <label class="form-check-label" for="htmlFormat">
+                                HTML Report
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reportName" class="form-label">Report Name (Optional)</label>
+                        <input type="text" class="form-control" id="reportName" name="reportName" 
+                               placeholder="Custom report name">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle select all reports
+    function toggleSelectAllReports() {
+        const selectAll = document.getElementById('selectAllReports');
+        const checkboxes = document.querySelectorAll('.report-checkbox');
+        checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
+    }
+    
+    // Filter reports
+    function filterReports() {
+        const dateRange = document.getElementById('dateRange').value;
+        const reportType = document.getElementById('reportType').value;
+        const sortBy = document.getElementById('sortBy').value;
+        
+        // This would filter the reports based on the selected criteria
+        console.log('Filtering reports:', { dateRange, reportType, sortBy });
+        
+        // For now, just reload the page with query parameters
+        const params = new URLSearchParams({
+            dateRange,
+            reportType,
+            sortBy
+        });
+        
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+    }
+    
+    // Generate new report
+    function generateNewReport() {
+        const modal = new bootstrap.Modal(document.getElementById('newReportModal'));
+        modal.show();
+    }
+    
+    // Handle report source change
+    document.getElementById('reportSource').addEventListener('change', function() {
+        const customSource = document.getElementById('customSource');
+        if (this.value === 'custom') {
+            customSource.style.display = 'block';
+        } else {
+            customSource.style.display = 'none';
+        }
+    });
+    
+    // Generate report
+    function generateReport() {
+        const form = document.getElementById('newReportForm');
+        const formData = new FormData(form);
+        
+        const reportData = {
+            source: formData.get('reportSource'),
+            formats: [],
+            name: formData.get('reportName')
+        };
+        
+        // Get selected formats
+        if (document.getElementById('jsonFormat').checked) {
+            reportData.formats.push('json');
+        }
+        if (document.getElementById('htmlFormat').checked) {
+            reportData.formats.push('html');
+        }
+        
+        if (reportData.formats.length === 0) {
+            alert('Please select at least one report format');
+            return;
+        }
+        
+        if (reportData.source === 'custom') {
+            const customIOCs = formData.get('customIOCs');
+            if (!customIOCs.trim()) {
+                alert('Please provide IOC data for custom reports');
+                return;
+            }
+            reportData.custom_iocs = customIOCs;
+        }
+        
+        // Close modal and show loading
+        bootstrap.Modal.getInstance(document.getElementById('newReportModal')).hide();
+        showLoading();
+        
+        // Call API to generate report
+        apiCall('/api/reports/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(reportData)
+        })
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                alert('Report generated successfully!');
+                location.reload();
+            } else {
+                alert('Report generation failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            alert('Report generation error: ' + error.message);
+        });
+    }
+    
+    // View report
+    function viewReport(filename) {
+        // Open HTML reports in new tab, JSON reports in modal
+        if (filename.endsWith('.html')) {
+            window.open(`/reports/${filename}`, '_blank');
+        } else {
+            // Load JSON report content and show in modal
+            showReportDetails(filename);
+        }
+    }
+    
+    // Download report
+    function downloadReport(filename) {
+        window.location.href = `/reports/${filename}?download=1`;
+    }
+    
+    // Show report details
+    function showReportDetails(filename) {
+        const modal = new bootstrap.Modal(document.getElementById('reportDetailsModal'));
+        const content = document.getElementById('reportDetailsContent');
+        
+        content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+        
+        // Load report details
+        apiCall(`/api/reports/${encodeURIComponent(filename)}/details`)
+            .then(response => {
+                console.log('API Response:', response); // Debug log
+                if (response.success) {
+                    const data = response.details;
+                    console.log('Details data:', data); // Debug log
+                    content.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Report Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Filename:</strong></td><td>${data.filename || 'undefined'}</td></tr>
+                                    <tr><td><strong>Analysis ID:</strong></td><td><code>${data.analysis_id || 'undefined'}</code></td></tr>
+                                    <tr><td><strong>Generated:</strong></td><td>${formatDateTime(data.generated_at)}</td></tr>
+                                    <tr><td><strong>File Size:</strong></td><td>${data.file_size || 'N/A'}</td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Analysis Summary</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>Total IOCs:</strong></td><td>${data.total_iocs}</td></tr>
+                                <tr><td><strong>High Risk:</strong></td><td><span class="badge severity-critical">${data.high_risk_count}</span></td></tr>
+                                <tr><td><strong>Duration:</strong></td><td>${data.duration || 'N/A'}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge bg-success">Complete</span></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    ${data.summary ? `
+                        <div class="mt-3">
+                            <h6>Severity Distribution</h6>
+                            <div class="row">
+                                ${Object.entries(data.summary.severity_distribution || {}).map(([level, count]) => `
+                                    <div class="col-md-2 text-center">
+                                        <h5 class="severity-${level}">${count}</h5>
+                                        <small>${level.toUpperCase()}</small>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+                
+                document.getElementById('downloadReportBtn').onclick = function() {
+                    downloadReport(filename);
+                };
+            } else {
+                content.innerHTML = '<div class="alert alert-danger">Error loading report details: ' + (response.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            content.innerHTML = '<div class="alert alert-danger">Error loading report details: ' + (error.error || error.message || 'Unknown error') + '</div>';
+        });
+        
+        modal.show();
+    }
+    
+    // Delete report
+    function deleteReport(filename) {
+        if (confirm(`Are you sure you want to delete ${filename}?`)) {
+            apiCall(`/api/reports/${encodeURIComponent(filename)}`, {
+                method: 'DELETE'
+            })
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Delete failed: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Delete error: ' + error.message);
+            });
+        }
+    }
+    
+    // Bulk actions
+    function bulkDeleteReports() {
+        const selected = Array.from(document.querySelectorAll('.report-checkbox:checked'))
+            .map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            alert('Please select at least one report');
+            return;
+        }
+        
+        if (confirm(`Are you sure you want to delete ${selected.length} reports?`)) {
+            // Implement bulk delete
+            console.log('Bulk delete:', selected);
+        }
+    }
+    
+    function bulkDownloadReports() {
+        const selected = Array.from(document.querySelectorAll('.report-checkbox:checked'))
+            .map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            alert('Please select at least one report');
+            return;
+        }
+        
+        // Implement bulk download
+        console.log('Bulk download:', selected);
+    }
+    
+    // Refresh reports
+    function refreshReports() {
+        location.reload();
+    }
+    
+    // Show actions page
+    function showActions(analysisId) {
+        window.location.href = `/actions?analysis_id=${analysisId}`;
+    }
+</script>
+{% endblock %}

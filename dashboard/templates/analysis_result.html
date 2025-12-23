@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Result - {{ analysis_id }}{% endblock %}
+
+{% block page_title %}Analysis Results{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold">Analysis Summary</h6>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="downloadReport()">
+                        <i class="fas fa-download"></i> Download Report
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="shareResults()">
+                        <i class="fas fa-share"></i> Share
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h5 class="text-primary">{{ analysis_id[:8] }}...</h5>
+                            <small class="text-muted">Analysis ID</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h5 class="text-success">Complete</h5>
+                            <small class="text-muted">Status</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h5 id="totalIOCs">-</h5>
+                            <small class="text-muted">IOCs Analyzed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h5 id="duration">-</h5>
+                            <small class="text-muted">Duration</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Content -->
+<div id="analysisContent">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <h6 class="mt-3">Loading analysis results...</h6>
+        <p class="text-muted">Please wait while we fetch the analysis data</p>
+    </div>
+</div>
+
+<!-- IOC Results Table -->
+<div id="iocResults" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="m-0 font-weight-bold">IOC Analysis Results</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>IOC Value</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>Score</th>
+                            <th>Enrichment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="iocTableBody">
+                        <!-- IOCs will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Severity Distribution -->
+<div id="severityDistribution" style="display: none;">
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold">Severity Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="severityPieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold">IOC Type Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="typeBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations -->
+<div id="recommendations" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="m-0 font-weight-bold">Security Recommendations</h6>
+        </div>
+        <div class="card-body">
+            <div id="recommendationsContent">
+                <!-- Recommendations will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Options -->
+<div id="exportOptions" style="display: none;">
+    <div class="card">
+        <div class="card-header">
+            <h6 class="m-0 font-weight-bold">Export Options</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Report Formats</h6>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="exportFormat('json')">
+                            <i class="fas fa-file-code"></i> Export JSON Report
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="exportFormat('html')">
+                            <i class="fas fa-file-alt"></i> Export HTML Report
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="exportFormat('csv')">
+                            <i class="fas fa-file-csv"></i> Export CSV Data
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6>Share Options</h6>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="shareViaEmail()">
+                            <i class="fas fa-envelope"></i> Share via Email
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="copyLink()">
+                            <i class="fas fa-link"></i> Copy Link
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" onclick="generatePDF()">
+                            <i class="fas fa-file-pdf"></i> Generate PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let analysisData = null;
+    
+    // Load analysis results
+    document.addEventListener('DOMContentLoaded', function() {
+        loadAnalysisResults();
+    });
+    
+    function loadAnalysisResults() {
+        const analysisId = '{{ analysis_id }}';
+        
+        apiCall(`/api/analysis/${analysisId}`)
+            .then(data => {
+                analysisData = data;
+                displayResults(data);
+            })
+            .catch(error => {
+                document.getElementById('analysisContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Failed to load analysis results: ${error.message}
+                    </div>
+                `;
+            });
+    }
+    
+    function displayResults(data) {
+        // Update summary
+        document.getElementById('totalIOCs').textContent = data.classified_ioc_count || 0;
+        document.getElementById('duration').textContent = (data.duration_seconds || 0).toFixed(2) + 's';
+        
+        // Show results content
+        document.getElementById('analysisContent').innerHTML = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                Analysis completed successfully! ${data.classified_ioc_count || 0} IOCs were analyzed.
+            </div>
+        `;
+        
+        // Display IOCs
+        if (data.iocs && data.iocs.length > 0) {
+            displayIOCs(data.iocs);
+            document.getElementById('iocResults').style.display = 'block';
+        }
+        
+        // Display charts
+        if (data.severity_summary) {
+            displayCharts(data.severity_summary);
+            document.getElementById('severityDistribution').style.display = 'block';
+        }
+        
+        // Display recommendations
+        if (data.recommendations) {
+            displayRecommendations(data.recommendations);
+            document.getElementById('recommendations').style.display = 'block';
+        }
+        
+        // Show export options
+        document.getElementById('exportOptions').style.display = 'block';
+    }
+    
+    function displayIOCs(iocs) {
+        const tbody = document.getElementById('iocTableBody');
+        tbody.innerHTML = '';
+        
+        iocs.forEach(ioc => {
+            const row = document.createElement('tr');
+            const severity = ioc.severity || { level: 'info', score: 0 };
+            const enrichment = ioc.enrichment || {};
+            
+            row.innerHTML = `
+                <td>
+                    <code class="ioc-value">${ioc.ioc_value}</code>
+                    ${ioc.original_value && ioc.original_value !== ioc.ioc_value ? 
+                        `<br><small class="text-muted">Original: ${ioc.original_value}</small>` : ''}
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${ioc.ioc_type ? ioc.ioc_type.toUpperCase() : 'UNKNOWN'}</span>
+                </td>
+                <td>
+                    <span class="badge severity-${severity.level || 'info'}">${severity.level ? severity.level.toUpperCase() : 'UNKNOWN'}</span>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">${severity.score || 0}</span>
+                        <div class="progress" style="width: 50px; height: 8px;">
+                            <div class="progress-bar severity-${severity.level || 'info'}" 
+                                 style="width: ${((severity.score || 0) / 10 * 100)}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    ${enrichment.sources && Array.isArray(enrichment.sources) ? 
+                        enrichment.sources.map(src => `<span class="badge bg-primary me-1">${src}</span>`).join('') : 
+                        '<span class="text-muted">None</span>'}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="viewIOCDetails('${ioc.ioc_value}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    function displayCharts(severitySummary) {
+        // Severity Pie Chart
+        const severityCtx = document.getElementById('severityPieChart').getContext('2d');
+        const severityData = severitySummary.severity_distribution || {};
+        
+        new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(severityData),
+                datasets: [{
+                    data: Object.values(severityData),
+                    backgroundColor: [
+                        '#dc3545',  // critical
+                        '#fd7e14',  // high
+                        '#ffc107',  // medium
+                        '#28a745',  // low
+                        '#17a2b8'   // info
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Type Bar Chart
+        const typeCtx = document.getElementById('typeBarChart').getContext('2d');
+        const typeData = severitySummary.type_distribution || {};
+        
+        new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(typeData),
+                datasets: [{
+                    label: 'Count',
+                    data: Object.values(typeData),
+                    backgroundColor: '#6f42c1',
+                    borderColor: '#5a32a3',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+    
+    function displayRecommendations(recommendations) {
+        const content = document.getElementById('recommendationsContent');
+        
+        if (Array.isArray(recommendations) && recommendations.length > 0) {
+            content.innerHTML = recommendations.map(rec => `
+                <div class="alert alert-info mb-2">
+                    <i class="fas fa-lightbulb"></i>
+                    ${rec}
+                </div>
+            `).join('');
+        } else {
+            content.innerHTML = '<p class="text-muted">No specific recommendations available.</p>';
+        }
+    }
+    
+    function viewIOCDetails(iocValue) {
+        window.open(`/ioc/${encodeURIComponent(iocValue)}`, '_blank');
+    }
+    
+    function downloadReport() {
+        if (!analysisData) return;
+        
+        const dataStr = JSON.stringify(analysisData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `analysis_${analysisData.analysis_id}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+    
+    function exportFormat(format) {
+        console.log(`Exporting as ${format}`);
+        // Implement format-specific export
+    }
+    
+    function shareViaEmail() {
+        const subject = `PulseLens Analysis Results - ${analysisData.analysis_id}`;
+        const body = `Analysis completed successfully. ${analysisData.classified_ioc_count} IOCs analyzed.\n\nView results: ${window.location.href}`;
+        window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+    
+    function copyLink() {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Link copied to clipboard!');
+        });
+    }
+    
+    function generatePDF() {
+        alert('PDF generation will be available in future versions');
+    }
+    
+    function shareResults() {
+        // Show share modal or options
+        shareViaEmail();
+    }
+</script>
+{% endblock %}
